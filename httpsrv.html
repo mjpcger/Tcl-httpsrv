@@ -1,0 +1,1081 @@
+<body style="font-family:helvetica">
+<h1>TCL Extension for HTTP Server</h1>
+</body>
+This extension provides several functions that allow dynamic creation of HTML pages and script tags. It
+allows to specify link, text, bitmap, entry, checkbutton, radiobutton, menu fields and button widgets. In 
+combination with any web browser, it allows to create a web page, fill fields and finally click a Button.
+Since buttons can be combined with scripts, that input can be processed.<br>
+It is possible to specify groups of widgets via the block or the table widget: While the block widget
+can be used to simply concatenate widgets and - optionally - additional HTML code, a block widget can
+be used to arrange widgets within a grid. It is allowed to add both, block or table widgets, to block or
+table widgets.<p>
+Global widgets can be used to represent a web page to be shown by a browser of your choice. They can be added
+to a service - also represented by a global array variable. A service can be created with a service port
+and a widget representing the main page to be shown whenever <b>localhost:<i>port</i></b> will be typed into
+the address line of the browser.<br>
+Button widgets can have a command and a precommand script argument. Both arguments are a function body
+called by the service whenever the button has been pressed:<ul><li/>The precommand script can be used
+to specify the page to be sent next. Typically, it uses the http response to verify which page shall be
+displayed next.<li/>The command script will be called after the next web page has been sent, but before
+the <b>body</b> tag has been closed. This allows the script to add further HTML code to the page or to
+send some Javascript snipets, e.g to modify style attributes or the text of a text widget.
+It is strictly recommended to use only the functions <a href="#httpChangeWidgetText">httpChangeWidgetText</a>,
+ <a href="#httpChangeWidgetStyle">httpChangeWidgetStyle</a>, <a href="#httpAppendCurrentPage">
+httpAppendCurrentPage</a> and <a href="#httpClearCurrentPage">httpClearCurrentPage</a> for page
+manipulations.</ul>
+Whenever a page widget will be added to a service, it is possible to add up to three scripts for that
+page to the service: a <b>precommand</b> script, a <b>command</b> script and a <b>postcommand</b> script.
+If specified, each script - interpreted as a tcl list - must have at least 3 elements and the first
+element must be precommand, command or postcommand. For details, see
+ <a href="#httpAddPage">httpAddPage</a>.<p>
+Each widget will be represented by an array variable created by one of the widget creation functions.
+Three kinds of widgets can be generated:
+<ul><li/>Global widgets can be used within the whole script: Texts can be changed, values can be
+adjusted within the server. Their names start with a capital letter.
+<li/>Local widgets are restricted: Changes are only possible within the same level (see <b>info level
+</b> for details about levels), and changes will not affect block or table widgets the widget has been
+added to previously. Their names do not start with a capital letter.
+<li/>Widgets within a namespace: Widgets starting with a capital letter will be handled like global
+widgets, all other like local widgets.
+</ul>
+Keep in mind that main widgets (almost always a block or a table widget) must be global widgets, as
+well as button, checkbutton, radiobutton, menu widgets and text widgets with dynamically changeable text
+to become accessible to the service.<p>
+This extension supports logging: As default, logging output will be written to stderr, but can be
+redirected. Is set, the global variable <b>httpIO</b> can be set to a writable channel. The following
+logging levels can be selected via global variable <b>httpLogLevel</b>: <b>none</b>, <b>error</b>,
+<b>info</b>, <b>warning</b and <b>debug</b>. Default is <b>info</b>. See <a href="#log">log</a> For
+details.<p>
+Basic authorization support is available through function
+<a href="#httpAuthCallback">httpAuthCallback</a>. This function will be called whenever a client tries
+to load one of the following file types: jpeg, tiff, png, gif, bmp, mp4 or webm. It must return to avoid
+the download or a non-zero value to allow it. The default implementation returns 1. A service using
+this extension should overwrite this function with a service specific version.<br>
+Keep in mind: Download of css, html and ico files present in the working directory is always possible.
+However, if the client sends HTTP GET or HTTP POST messages to load one of the dynamic pages loaded
+into the service via <a href="#httpAddPage">httpAddPage</a> or
+<a href="#httpCreateService">httpCreateService</a>, it can simply append ".htm" or ".html" to the
+corresponding widget name and use it as path - part of the URI. in this situation, the service can
+perform authorization and validation via the precommand and command scripts bound to these pages and /
+or included buttons.<p>
+<h2>Contents</h2>
+<ul>Client Namespace
+<ul><a href="#socket"><i>socket</i></a>: Client socket namespace, used for browser communication.
+</ul>
+</ul>
+<ul>Text Manipulation
+<ul>
+<a href="#httpText">httpText</a>: Convert text into format of tag contents.<br>
+<a href="#httpAttrText">httpAttrText</a>: Convert text into a format that can be specified within
+attribute values.<br>
+<a href="#httpUnicodeText">httpUnicodeText</a>: Convert text from system encoding to unicode.
+</ul>
+Widget Creation
+<ul>
+<a href="#httpLink">httpLink</a>: <br>
+<a href="#httpLabel">httpLabel</a>: <br>
+<a href="#httpEntry">httpEntry</a>: <br>
+<a href="#httpButton">httpButton</a>: <br>
+<a href="#httpCheckButton">httpCheckButton</a>: <br>
+<a href="#httpRadioButton">httpRadioButton</a>: <br>
+<a href="#httpMenu">httpMenu</a>: <br>
+<a href="#httpBlock">httpBlock</a>: <br>
+<a href="#httpTable">httpTable</a>:
+</ul>
+Widget Manipulation
+<ul>
+<a href="#httpChangeWidgetText">httpChangeWidgetText</a>: <br>
+<a href="#httpChangeWidgetStyle">httpChangeWidgetStyle</a>: <br>
+<a href="#httpBlockAppend">httpBlockAppend</a>: <br>
+<a href="#httpPlace">httpPlace</a>:
+</ul>
+Service Control
+<ul>
+<a href="#httpCreateService">httpCreateService</a>: <br>
+<a href="#httpAddPage">httpAddPage</a>: <br>
+<a href="#httpStartService">httpStartService</a>: <br>
+<a href="#httpAppendCurrentPage">httpAppendCurrentPage</a>: <br>
+<a href="#httpClearCurrentPage">httpClearCurrentPage</a>: <br>
+<a href="#httpStopService">httpStopService</a>:
+</ul>
+Internally Used Methods
+<ul>
+<a href="#httpAuthCallback">httpAuthCallback</a><br>
+<a href="#log">log</a><br>
+<a href="#InternalUse">Further Methods for Internal Use</a>
+</ul>
+
+</ul><h2 id="socket">Client Namespace</h2><ul>
+The service can accept several connections with several browser instances at the same time. The Client
+socket bound to each communication channel acts as a unique communication instance identifier and this
+extension uses it as namespace name for client specific stuff.<br>
+Currently, only the following namespace variables have been defined:<ul>
+<table>
+<tr><td style="vertical-align: top;">pathqueries:</td><td>A list containing path and query elements
+of the URL used to start the current request. Starts with the path, followed by two-element lists
+containing name and value passed via the URL line. All components encoded in unicode. For more
+detailed information, see <a href="#httpNormalize">httpNormalize</a>.</td></tr>
+<tr><td style="vertical-align: top;">post:</td><td>An array variable that contains the contents
+of a HPPT POST body. Element names are the value names and their values the corresponding values.</td></tr>
+<tr><td style="vertical-align: top;">trigger:</td><td>Internally used variable used for timeout
+handling of client communication. Contents must be an integer value. Can be used within command
+scripts, but must not be used in asynchronous processings to avoid malfunction of
+client communication.</td></tr>
+</table>
+</ul>
+Each service implementation can use this namespace to add further variables as needed. Keep in mind that
+these namespaces will be deleted whenever the corresponding client socket will be closed.
+
+</ul><h2>Text Manipulation</h2><ul>
+
+<h3 id="httpText">httpText</h3>
+<h4>Synopsis</h4>
+<ul><b>httpText</b> <i>text</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td><i>text</i></td><td>Text to be converted into http tag value format.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>The converted text.</ul>
+<h5>Usage</h5>
+<ul>This method can be used to convert any text into http tag value compatible format. This means, that all
+occurrences of &lt; will be converted to <b>&amp;lt;</b> and each line endings (\n, \r or \r\n) will be converted
+to <b>&lt;br></b>.<br>This method should only be used to construct tag parameters to be used in calls to 
+<a href="#httpBlockAppend">httpBlockAppend</a>.</ul>
+</ul>
+
+<h3 id="httpAttrText">httpAttrText</h3>
+<h4>Synopsis</h4>
+<ul><b>httpAttrText</b> <i>text</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td><i>text</i></td><td>Text to be converted into attribute value format.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>The converted text.</ul>
+<h5>Usage</h5>
+<ul>This method can be used to convert any text into http attribute value compatible format. This means, that all
+occurrences of &lt;, &gt;, " and control characters will be converted to their<b>&amp;#...;</b> representation.
+<br>This method should only be used to construct tag parameters to be used in calls to
+ <a href="#httpBlockAppend">httpBlockAppend</a>.</ul>
+</ul>
+
+<h3 id="httpUnicodeText">httpUnicodeText</h3>
+<h4>Synopsis</h4>
+<ul><b>httpUnicodeText</b> <i>text</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td><i>text</i></td><td>Text to be converted. </td></tr>
+</table>
+<h5>Returns</h5>
+<ul>The converted text.</ul>
+<h5>Usage</h5>
+<ul>This method can be used to convert texts stored within scripts to the internal string representation. Should be
+used for texts encoded with system specific encoding. See Tcl command <b>encoding system</b>.</ul>
+</ul>
+
+</ul><h2>Widget Creation</h2><ul>
+
+<h3 id="httpLink">httpLink</h3>
+<h4>Synopsis</h4>
+<ul><b>httpLink</b> <i>name args</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name.</td></tr>
+<tr><td style="vertical-align: top;"><i>args</i></td><td>Argument list, each argument containing a list with
+two elenents, where the first element specifies a name and the second element the corresponding value. The
+following names will be supported:<br>
+class: CSS class name,<br>
+label: Name of widget specifying the link <a href="#httpLabel">label</a>,<br>
+script: 0 or 1 (default: 0),<br>
+style: CSS style string,<br>
+target: Link address, in URI format.<br>
+</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>Widget name.</ul>
+<h5>Usage</h5>
+<ul>Creates a link. CSS style and class can be specified as well as label widget and the target address.<p>
+If argument {script 1} has been specified, the style of the widget can be changed within the <b>command</b>
+script of a <a href="#httpButton">httpButton</a> widget via function
+<a href="#httpChangeWidgetStyle">httpChangeWidgetStyle</a>.
+</ul>
+</ul>
+
+<h3 id="httpLabel">httpLabel</h3>
+<h4>Synopsis</h4>
+<ul><b>httpLabel</b> <i>name args</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name.</td></tr>
+<tr><td style="vertical-align: top;"><i>args</i></td><td>Argument list, each argument containing a list with
+two elenents, where the first element specifies a name and the second element the corresponding value. The
+following names will be supported:<br>
+bitmap: Name of a file containing the bitmap in case of a bitmap label,<br>
+class: CSS class name,<br>
+entry: Name of <a href="#httpCheckButton">checkbox</a>, <a href="#httpEntry">entry</a>, 
+<a href="#httpRadioButton">radiobutton</a> or <a href="#httpMenu">menu</a> to be bound to this label,<br>
+script: 0 or 1 (default: 0),<br>
+style: CSS style string,<br>
+text: Label text in case of a text label, alternate text in case of a bitmap label.<br>
+</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>Widget name.</ul>
+<h5>Usage</h5>
+<ul>Creates a text or bitmap label. CSS style and class can be specified as well as a bitmap file and / or a label
+text.<p>
+If argument {script 1} has been specified, the text of a text label can be changed within the <b>command</b>
+script of a <a href="#httpButton">httpButton</a> widget via function
+<a href="#httpChangeWidgetText">httpChangeWidgetText</a> and the style of the widget can be changed within
+the <b>command</b> script via function <a href="#httpChangeWidgetStyle">httpChangeWidgetStyle</a>.
+</ul>
+</ul>
+
+<h3 id="httpEntry">httpEntry</h3>
+<h4>Synopsis</h4>
+<ul><b>httpEntry</b> <i>name args</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name.</td></tr>
+<tr><td style="vertical-align: top;"><i>args</i></td><td>Argument list, each argument containing a list with
+two elenents, where the first element specifies a name and the second element the corresponding value. The
+following names will be supported:<table>
+<tr><td style="vertical-align: top;">class:</td><td>CSS class name,<td></tr>
+<tr><td style="vertical-align: top;">command:</td><td>Command to be executed when hidden entry has been
+mutated to a submit button and clicked via Javascrip by menu. For further details, see
+<a href="#httpMenu">httpMenu</a>. It will be used as body of a procedure with
+the arguments <b>service</b>, <b>widget</b> and <b>socket</b>, where<table>
+<tr><td style="vertical-align: top;"><b>service</b>:</td><td>Name of the service. A global array variable with that name contains all relevant information.
+Element <b>port</b> holds the TCP port number of the service, element <b>pagelist</b> holds a list of names
+of all main widgets supported by the service, element <b>sfd</b> holds the server socket handle and element
+<b>fds</b> holds a list of all active http requests, represented by the corresponding client socket handles.</td></tr>
+<tr><td style="vertical-align: top;"><b>widget</b>:</td><td>Name of the hidden entry widget that has been clicked.</td></tr>
+<tr><td style="vertical-align: top;"><b>socket</b>:</td><td>Socket handle to be used for communication with
+the client and name of namespace used by the service for communication with a specific client. See
+<a href="#socket">Client Namespace</a> for details.</td></tr>
+</table>
+command will be called after the page specified by <b>precommand</b> has been sent, before the
+client socket will be closed. Within this command, function <a
+href="#httpChangeWidgetText">httpChangeWidgetText</a> can be used to change the text of text labels created
+with argument {script 1}. In addition, function <a href="#httpChangeWidgetStyle">httpChangeWidgetStyle</a>
+can be used to change the style of all widgets created with argument {script 1}.</ul><td></tr>
+<tr><td style="vertical-align: top;">placeholder:</td><td>String to be shown whenever the entry field is empty,<td></tr>
+<tr><td style="vertical-align: top;">precommand:</td><td>Command to be executed when hidden entry has been
+mutated to a submit button and clicked via Javascrip by menu. For further details, see
+<a href="#httpMenu">httpMenu</a> It will be used as body of a procedure with
+the arguments <b>service</b>, <b>widget</b> and <b>socket</b>, where<table>
+<tr><td style="vertical-align: top;"><b>service</b>:</td><td>Name of the service. A global array variable with that name contains all relevant information.
+Element <b>port</b> holds the TCP port number of the service, element <b>pagelist</b> holds a list of names
+of all main widgets supported by the service, element <b>sfd</b> holds the server socket handle and element
+<b>fds</b> holds a list of all active http requests, represented by the corresponding client socket handles.</td></tr>
+<tr><td style="vertical-align: top;"><b>widget</b>:</td><td>Name of the button widget that has been pressed.</td></tr>
+<tr><td style="vertical-align: top;"><b>socket</b>:</td><td>Socket handle to be used for communication with
+the client and name of namespace used by the service for communication with a specific client. See
+<a href="#socket">Client Namespace</a> for details.</td></tr>
+</table>
+precommand will be called before the requested page will be sent to the client. It can
+return one of the names contained within the pagelist element of the service to specify it as next page to
+be displayed or an empty string for current page.</ul><td></tr>
+<tr><td style="vertical-align: top;">script:</td><td>0 or 1 (default: 0),<td></tr>
+<tr><td style="vertical-align: top;">size:</td><td>Size of entry field, in characters,<td></tr>
+<tr><td style="vertical-align: top;">style:</td><td>CSS style string,<td></tr>
+<tr><td style="vertical-align: top;">value:</td><td>Initial value of the field,<td></tr>
+<tr><td style="vertical-align: top;">varname:</td><td>Value name in HTTP POST message, default widget name,<td></tr>
+<tr><td style="vertical-align: top;">view:</td><td>Type of entry, may be one of button, color, date, datetime-local email, file, hidden, month,
+number, password, search, tel, text, time, url or week.<td></tr>
+</td></tr>
+</table>
+</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>Widget name.</ul>
+<h5>Usage</h5>
+<ul>Creates an entry field with the specified size and initial value. The view specifies which kind of entry
+shall be shown.<br> This widget can be specified in a <a href="#httpLabel">label</a> to bind the label to this widget.<p>
+If argument {script 1} has been specified, the style of the widget can be changed within the <b>command</b>
+script of a <a href="#httpButton">httpButton</a> widget via function
+<a href="#httpChangeWidgetStyle">httpChangeWidgetStyle</a>.
+
+</ul>
+</ul>
+
+<h3 id="httpButton">httpButton</h3>
+<h4>Synopsis</h4>
+<ul><b>httpButton</b> <i>name args</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name</td></tr>
+<tr><td style="vertical-align: top;"><i>args</i></td><td>Argument list, each argument containing a list with
+two elenents, where the first element specifies a name and the second element the corresponding value. The
+following names will be supported:<table>
+<tr><td style="vertical-align: top;">class:</td><td>CSS class name,<td></tr>
+<tr><td style="vertical-align: top;">command:</td><td>Command to be executed when button has been pressed. It will be used as body of a procedure with
+the arguments <b>service</b>, <b>widget</b> and <b>socket</b>, where<table>
+<tr><td style="vertical-align: top;"><b>service</b>:</td><td>Name of the service. A global array variable with that name contains all relevant information.
+Element <b>port</b> holds the TCP port number of the service, element <b>pagelist</b> holds a list of names
+of all main widgets supported by the service, element <b>sfd</b> holds the server socket handle and element
+<b>fds</b> holds a list of all active http requests, represented by the corresponding client socket handles.</td></tr>
+<tr><td style="vertical-align: top;"><b>widget</b>:</td><td>Name of the button widget that has been pressed.</td></tr>
+<tr><td style="vertical-align: top;"><b>socket</b>:</td><td>Socket handle to be used for communication with
+the client and name of namespace used by the service for communication with a specific client. See
+<a href="#socket">Client Namespace</a> for details.</td></tr>
+</table>
+command will be called after the page specified by <b>precommand</b> has been sent, before the
+client socket will be closed. Within this command, function <a
+href="#httpChangeWidgetText">httpChangeWidgetText</a> can be used to change the text of text labels created
+with argument {script 1}. In addition, function <a href="#httpChangeWidgetStyle">httpChangeWidgetStyle</a>
+can be used to change the style of all widgets created with argument {script 1}.</ul><td></tr>
+<tr><td style="vertical-align: top;">label:</td><td>Name of httpLabel variable describing the button <a href="#httpLabel">label</a>,<td></tr>
+<tr><td style="vertical-align: top;">precommand:</td><td>Command to be executed when button has been pressed. It will be used as body of a procedure with
+the arguments <b>service</b>, <b>widget</b> and <b>socket</b>, where<table>
+<tr><td style="vertical-align: top;"><b>service</b>:</td><td>Name of the service. A global array variable with that name contains all relevant information.
+Element <b>port</b> holds the TCP port number of the service, element <b>pagelist</b> holds a list of names
+of all main widgets supported by the service, element <b>sfd</b> holds the server socket handle and element
+<b>fds</b> holds a list of all active http requests, represented by the corresponding client socket handles.</td></tr>
+<tr><td style="vertical-align: top;"><b>widget</b>:</td><td>Name of the button widget that has been pressed.</td></tr>
+<tr><td style="vertical-align: top;"><b>socket</b>:</td><td>Socket handle to be used for communication with
+the client and name of namespace used by the service for communication with a specific client. See
+<a href="#socket">Client Namespace</a> for details.</td></tr>
+</table>
+precommand will be called before the requested page will be sent to the client. It can
+return one of the names contained within the pagelist element of the service to specify it as next page to
+be displayed or an empty string for current page.</ul><td></tr>
+<tr><td style="vertical-align: top;">script:</td><td>0 or 1 (default: 0),<td></tr>
+<tr><td style="vertical-align: top;">style:</td><td>CSS style string,<td></tr>
+<tr><td style="vertical-align: top;">text:</td><td>Button contents in case of a text button, otherwise the alternate text,<td></tr>
+</table>
+</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>Widget name.</ul>
+<h5>Usage</h5>
+<ul>Creates button widget.<p>
+If argument {script 1} has been specified, the style of the widget can be changed within the <b>command</b>
+script via function <a href="#httpChangeWidgetStyle">httpChangeWidgetStyle</a>.
+</ul>
+</ul>
+
+<h3 id="httpCheckButton">httpCheckButton</h3>
+<h4>Synopsis</h4>
+<ul><b>httpCheckButton</b> <i>name args</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name </i></td><td>Widget name</td></tr>
+<tr><td style="vertical-align: top;"><i>args</i></td><td>Argument list, each argument containing a list with
+two elenents, where the first element specifies a name and the second element the corresponding value. The
+following names will be supported:<br>
+class: CSS class name,<br>
+defaultvalue: Default value, must equal onvalue or an empty string,<br>
+onvalue: Value if selected,<br>
+script: 0 or 1 (default: 0),<br>
+style: CSS style string,<br>
+varname: Value name in HTTP POST message, default widget name.<br>
+</table>
+<h5>Returns</h5>
+<ul>Widget name.</ul>
+<h5>Usage</h5>
+<ul>Creates a CheckButton widget. It can be specified in a <a href="#httpLabel">label</a> to bind the label to this widget.<p>
+If argument {script 1} has been specified, the style of the widget can be changed within the <b>command</b>
+script of a <a href="#httpButton">httpButton</a> widget via function
+<a href="#httpChangeWidgetStyle">httpChangeWidgetStyle</a>.
+</ul>
+</ul>
+
+<h3 id="httpRadioButton">httpRadioButton</h3>
+<h4>Synopsis</h4>
+<ul><b>httpRadioButton</b> <i>name args</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name.</td></tr>
+<tr><td style="vertical-align: top;"><i>args</i></td><td>Argument list, each argument containing a list with
+two elenents, where the first element specifies a name and the second element the corresponding value. The
+following names will be supported:<br>
+class: CSS class name,<br>
+defaultvalue: Default value of varname.<br>
+script: 0 or 1 (default: 0),<br>
+style: CSS style string,<br>
+value: Value of button list if this radio button has been selected,<br>
+varname: Value name in HTTP POST message.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>Widget name.</ul>
+<h5>Usage</h5>
+<ul>Creates a RadioButton widget. Several RadioButton widgets are normally bound together via a common
+varname attribute that specifies the widget that holds the default value, if any. The widget that holds
+the default must not specify varname.<br>
+The radio button can be specified in a <a href="#httpLabel">label</a> to bind the label to this widget.<p>
+If argument {script 1} has been specified, the style of the widget can be changed within the <b>command</b>
+script of a <a href="#httpButton">httpButton</a> widget via function
+<a href="#httpChangeWidgetStyle">httpChangeWidgetStyle</a>.
+</ul>
+</ul>
+
+<h3 id="httpMenu">httpMenu</h3>
+<h4>Synopsis</h4>
+<ul><b>httpMenu</b> <i>name args</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name.</td></tr>
+<tr><td style="vertical-align: top;"><i>args</i></td><td>Argument list, each argument containing a list with
+two elenents, where the first element specifies a name and the second element the corresponding value. The
+following names will be supported:<br>
+button: Hidden entry widget. If specified, this value will be mutated into a just clicked button whenever an 
+option has been changed,<br>
+class: CSS class name,<br>
+defaultvalue: Default value of the widget (default: empty string),<br>
+entries: A list containing value - text pairs, where the value specifies the selection value and
+the text specifies the corresponding menu text,<br>
+script: 0 or 1 (default: 0),<br>
+style: CSS style string,<br>
+varname: Value name in HTTP POST message, default widget name.
+</table>
+<h5>Returns</h5>
+<ul>Widget name.</ul>
+<h5>Usage</h5>
+<ul>Create menu selection widget. It can be specified in a <a href="#httpLabel">label</a> to bind the label to this widget.<p>
+If argument {script 1} has been specified, the style of the widget can be changed within the <b>command</b>
+script of a <a href="#httpButton">httpButton</a> widget via function
+<a href="#httpChangeWidgetStyle">httpChangeWidgetStyle</a>.
+</ul>
+</ul>
+
+<h3 id="httpBlock">httpBlock</h3>
+<h4>Synopsis</h4>
+<ul><b>httpBlock</b> <i>name args</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name</td></tr>
+<tr><td style="vertical-align: top;"><i>args</i></td><td>Argument list, each argument containing a list with
+two elenents, where the first element specifies a name and the second element the corresponding value. The
+following names will be supported:<br>
+class: CSS class name,<br>
+elements: List of widget variables belonging to the block initially,<br>
+script: 0 or 1 (default: 0),<br>
+style: CSS style string.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>Widget name.</ul>
+<h5>Usage</h5>
+<ul>Creates a widget that consists of concatinated widgets. Further widgets and additional HTML code can be
+added via <a href="#httpBlockAppend">httpBlockAppend</a> afterwards.<p>
+If argument {script 1} has been specified, the style of the widget can be changed within the <b>command</b>
+script of a <a href="#httpButton">httpButton</a> widget via function
+<a href="#httpChangeWidgetStyle">httpChangeWidgetStyle</a>.
+</ul>
+</ul>
+
+<h3 id="httpTable">httpTable</h3>
+<h4>Synopsis</h4>
+<ul><b>httpTable</b> <i>name args</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name.</td></tr>
+<tr><td style="vertical-align: top;"><i>args</i></td><td>Argument list, each argument containing a list with
+two elenents, where the first element specifies a name and the second element the corresponding value. The
+following names will be supported:<br>
+class: CSS class name,<br>
+script: 0 or 1 (default: 0),<br>
+style: CSS style string.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>Widget name.</ul>
+<h5>Usage</h5>
+<ul>Creates a table widget to be filled with other widgets.<p>
+If argument {script 1} has been specified, the style of the widget can be changed within the <b>command</b>
+script of a <a href="#httpButton">httpButton</a> widget via function
+<a href="#httpChangeWidgetStyle">httpChangeWidgetStyle</a>.
+</ul>
+</ul>
+
+</ul><h2>Widget Manipulation</h2><ul>
+
+<h3 id="httpChangeWidgetText">httpChangeWidgetText</h3>
+<h4>Synopsis</h4>
+<ul><b>httpChangeWidgetText</b> <i>name text fd</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name.</td></tr>
+<tr><td style="vertical-align: top;"><i>text</i></td><td>New text to be displayed within the widget.</td></tr>
+<tr><td style="vertical-align: top;"><i>fd</i></td><td>Client socket handle.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>nothing.</ul>
+<h5>Usage</h5>
+<ul>Function can be called to change the text of a text label, a button or the value of an entry field.<br>
+Typically called within a <b>command</b> script. The
+corresponding script tag will be sent immediately via the specified socket handle.<br>
+This function does not change the widget itself, it only changes the contents of a widget within a 
+currently active page.</ul>
+</ul>
+
+<h3 id="httpChangeWidgetStyle">httpChangeWidgetStyle</h3>
+<h4>Synopsis</h4>
+<ul><b>httpChangeWidgetStyle</b> <i>name style value fd</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name.</td></tr>
+<tr><td style="vertical-align: top;"><i>value</i></td><td>New value of the style attribute. Must be
+one of the values supported for the specified style. Must not be contain '.</td></tr>
+<tr><td style="vertical-align: top;"><i>fd</i></td><td>Client socket handle.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>Nothing.</ul>
+<h5>Usage</h5>
+<ul>Function can be called to change the style of a widget from a command script of a button widget.<br>
+See <a href="#httpButton">httpButton</a> for details. The
+corresponding script tag will be sent immediately via the specified socket handle.</ul>
+</ul>
+
+<h3 id="httpBlockAppend">httpBlockAppend</h3>
+<h4>Synopsis</h4>
+<ul><b>httpBlockAppend</b> <i>name elements html_code</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name.</td></tr>
+<tr><td style="vertical-align: top;"><i>elements</i></td><td>A list of widget variables that shall be appended.
+Empty list must be specified if only additional HTML code shall be added.</td></tr>
+<tr><td style="vertical-align: top;"><i>html_code</i></td><td>Additional HTML code to be appended, e.g. &lt;br/> or &lt;p>. Optional
+parameter, default is an empty string. Must contain  UFT-8 encoded HTML elements(s). For textual parts
+within attributes and embedded texts, the functions <a href="#httpAttrText">httpAttrText</a> and
+ <a href="#httpText">httpText</a> can be used.
+</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>Widget name.</ul>
+<h5>Usage</h5>
+<ul>Adds further widgets or any html tag to the specified block widget.</ul>
+</ul>
+
+<h3 id="httpPlace">httpPlace</h3>
+<h4>Synopsis</h4>
+<ul><b>httpPlace</b> <i>name entry row column</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Name of table widget.</td></tr>
+<tr><td style="vertical-align: top;"><i>entry</i></td><td>Name of widget to be placed within table widget.</td></tr>
+<tr><td style="vertical-align: top;"><i>row</i></td><td>Starting (and optional ending) row of widget.</td></tr>
+<tr><td style="vertical-align: top;"><i>column</i></td><td>Starting (and optional ending) column of widget.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>Table widget name.</ul>
+<h5>Usage</h5>
+<ul>Places the widget specified by <i>entry</i> within table <i>name</i>. <i>row</i> and <i>column</i> specify
+the horizontal and vertical coordinates of the widget within the table. Row and column numbers are positive values.
+Both, <i>row</i> and <i>column</i> can be either a positive integer or a list of positive integer numbers, where
+the last number must not be less than the first one. In the latter case, the widget will be placed within the
+specified row and / or column range.</ul>
+</ul>
+
+<h3 id="httpCreateService">httpCreateService</h3>
+<h4>Synopsis</h4>
+<ul><b>httpCreateService</b> <i>service port widget args</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>service</i></td><td>Name of the service.</td></tr>
+<tr><td style="vertical-align: top;"><i>port</i></td><td>TCP port of the service.</td></tr>
+<tr><td style="vertical-align: top;"><i>widget</i></td><td>Name of the main widget. This widget specifies the
+body of main HTML page.</td></tr>
+<tr><td style="vertical-align: top;"><i>title</i></td><td>Contents of the <b>title</b> tag of the main page.</td></tr>
+<tr><td style="vertical-align: top;"><i>args</i></td><td>List of page specific parameters.
+ See <a href="#httpAddPage">httpAddPage</a> for details. </td></tr>
+</table>
+<h5>Returns</h5>
+<ul>Nothing.</ul>
+<h5>Usage</h5>
+<ul>Create a server that provides a html page constructed from the specified widget. See
+<a href="#httpAddPage">httpAddPage</a> for details about parameter <i>widget</i> and <i>args</i>, because Both
+parameters will be used internally to add the initial page to the service.
+</ul>
+</ul>
+
+<h3 id="httpAddPage">httpAddPage</h3>
+<h4>Synopsis</h4>
+<ul><b>httpAddPage</b> <i>service widget args</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>service</i></td><td>Name of the service.</td></tr>
+<tr><td style="vertical-align: top;"><i>widget</i></td><td>Name of a widget that will be added to the service
+as body of a HTML page.</td></tr>
+<tr><td style="vertical-align: top;"><i>title</i></td><td>Contents of the <b>title</b> tag of the page to be added.</td></tr>
+<tr><td style="vertical-align: top;"><i>args</i></td><td>List of page specific parameters. Each parameter
+must be a list, where the number of list elements is specific for the kind of an argument:<ul>
+list with 1 element: Name of a CSS file to be used for that page,<br>
+list with 2 elements: CSS class name followed by corresponding class values,<br>
+list with more than 2 elements: List containing a keyword, followed by command statements. The keyword Must
+be one of <b>precommand</b>, <b>command</b> or <b>postcommand</b> within the first list element. All other
+list elements form the corresponding command.<br>
+Each of the specified commands will be used as body of a procedure with the arguments <b>service</b>
+and <b>socket</b>, where<ul>
+<table>
+<tr><td style="vertical-align: top;"><b>page</b>:</td><td>Name of the page widget.</td></tr>
+<tr><td style="vertical-align: top;"><b>service</b>:</td><td>Name of the service. A global array variable with
+that name contains all relevant information. Element <b>port</b> holds the TCP port number of the service,
+element <b>pagelist</b> holds a list of names of all main widgets supported by the service, element
+<b>sfd</b> holds the server socket handle and element <b>fds</b> holds a list of all active http requests,
+represented by the corresponding client socket handles.</td></tr>
+<tr><td style="vertical-align: top;"><b>socket</b>:</td><td>Socket handle to be used for communication with
+the client and name of client specific namespace. See <a href="#socket">Client Namespace</a> for details.</td></tr>
+</table>
+</ul>
+Scripts specified with <b>precommand</b> run before the page will be sent to the client. Their main
+usage is to add or modify post variables, e.g. whenever query elements are part of the uri used to 
+call the page.<br>
+Scripts specified with <b>command</b> will be called after the page has been sent to the client, before
+the body tag has been closed. These scripts can be used to modify page contents via
+<a href="#httpChangeWidgetText">httpChangeWidgetText</a>,
+<a href="#httpChangeWidgetStyle">httpChangeWidgetStyle</a>,
+<a href="#httpAppendCurrentPage">httpAppendCurrentPage</a> or
+<a href="#httpClearCurrentPage">httpClearCurrentPage</a>.<br>
+Scripts specified with <b>postcommand</b> will be called after all elements of a page have been sent,
+after the client socket has been closed, but before the corresponding namespace will be deleted. This
+script can be used for server background processing. Page manipulations are not possible within a
+<b>postcommand</b> script.
+</ul></td></tr>
+</table>
+<h5>Returns</h5>
+<ul>Nothing.</ul>
+<h5>Usage</h5>
+<ul>Adds a list containing three elements to the pagelist component of the specified service.<br>
+The first element is the widget name, the second element is a list containing CSS file names used within
+the HTML head (usually 0 or 1 element), the third elemen is a list containing two-element lists containing
+a class name and the corresponding class values to be used within the HTML page head.<br>
+The widget name, extended by ".html", will be used by the service to select this page for further processing.
+If no page will be specified, the service will provide the first page, added within
+<a href="#httpCreateService">httpCreateService</a>.<br>
+</ul>
+</ul>
+
+</ul><h2>Service Control</h2><ul>
+
+<h3 id="httpStartService">httpStartService</h3>
+<h4>Synopsis</h4>
+<ul><b>httpStartService</b> <i>service</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>service</i></td><td>Name of the service used in previous calls to <a href="#httpCreateService">httpCreateService</a>
+and <a href="#httpAddPage">httpAddPage</a>.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>Nothing.</ul>
+<h5>Usage</h5>
+<ul>Starts the specified service.</ul>
+</ul>
+
+<h3 id="httpAppendCurrentPage">httpAppendCurrentPage</h3>
+<h4>Synopsis</h4>
+<ul><b>httpAppendCurrentPage</b> <i>name page handle widget</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Name of the service the handle belongs to.</td></tr>
+<tr><td style="vertical-align: top;"><i>page</i></td><td>Name of the page to be extended.</td></tr>
+<tr><td style="vertical-align: top;"><i>handle</i></td><td>Client handle to be used to append the widget
+and name of client specific namespace. See <a href="#socket">Client Namespace</a> for details.</td></tr>
+<tr><td style="vertical-align: top;"><i>widget</i></td><td>Name of the widget to be appended to the current
+page.</td></tr>
+^</table>
+<h5>Returns</h5>
+<ul>Nothing.</ul>
+<h5>Usage</h5>
+<ul>Sends the HTML code for the specified widget to the specified client socket. Typically used within
+a <b>command</b> script of a button to append a widget to the current web page.</ul>
+</ul>
+
+<h3 id="httpClearCurrentPage">httpClearCurrentPage</h3>
+<h4>Synopsis</h4>
+<ul><b>httpClearCurrentPage</b> <i>name page handle</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Name of the service the handle belongs to.</td></tr>
+<tr><td style="vertical-align: top;"><i>page</i></td><td>Name of the page to be extended.</td></tr>
+<tr><td style="vertical-align: top;"><i>handle</i></td><td>Client handle to be used to append the widget
+and name of client specific namespace. See <a href="#socket">Client Namespace</a> for details.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>Nothing.</ul>
+<h5>Usage</h5>
+<ul>Clears the inner HTML code for the specified widget via specified client socket. Typically used within
+a <b>command</b> script of a button to restart building of a page .</ul>
+</ul>
+
+<h3 id="httpStopService">httpStopService</h3>
+<h4>Synopsis</h4>
+<ul><b>httpStopService</b> <i>service</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>service</i></td><td>Service name.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>Nothing.</ul>
+<h5>Usage</h5>
+<ul>Stops using the specified service: Closes all open connections and the server socket.</ul>
+</ul>
+
+<h1 id="InternalUse">Methods for Internal Use</h1>
+The following methods will be used internally by this extension. Changing or using these methods is possible, e.g.
+to create new widget types, but should not be necessary.
+
+<h3 id="httpAuthCallback">httpAuthCallback</h3>
+<h4>Synopsis</h4>
+<ul><b>httpAuthCallback</b> <i>pathqueries</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>pathqueries</i></td><td>List of path and query elements of the uri sent by the client.
+For details, see <a href="#httpNormalize">httpNormalize</a>.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>0 to reject requested download, any non-zero value to allow the download.</ul>
+<h5>Usage</h5>
+<ul>Will be called before one of the supported image or video files will be downloaded. Must be
+overwritten within the server to allow authentification because the default implementation Returns
+always 1.
+</ul>
+</ul>
+
+<h3 id="log">log</h3>
+<h4>Synopsis</h4>
+<ul><b>log</b> <i>level text source</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>level</i></td><td>Logging level, one of none, error, info,
+warning or debug. Default info. Alternatively, a level number (0 for none, 1 for error, ..., 4 for
+debug) can be specified as well, but this is not recommended: Further levels might be added in future,
+resulting in change of meaning of level numbers.</td></tr>
+<tr><td style="vertical-align: top;"><i>text</i></td><td>Text to be written to log file.</td></tr>
+<tr><td style="vertical-align: top;"><i>source</i></td><td>Identifier for the message source. Optional parameter, default is
+an empty string</td></tr></table>
+<h5>Returns</h5>
+<ul>Nothing</ul>
+<h5>Usage</h5>
+<ul>Writes a formatted message to the log files specified via global variable <b>httpIO</b>, a list of
+handles opened for writing. The default contents of <b>httpIO</b> is <b>stderr</b>, which results in
+logging to the standard error output of the console.<br>General format of logging output is as follows:<ul>
+Date Time <i>level source text</i>
+</ul>
+In most cases, it is a good idea to pass the contents of the client socket variable as source, if
+available. The widget name or the service name can be other meaningful source values. 
+</ul>
+</ul>
+
+<h3 id="httpNormalize">httpNormalize</h3>
+<h4>Synopsis</h4>
+<ul><b>httpNormalize</b> <i>text</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td><i>text</i></td><td>Text to be converted.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>The converted text: List containint path in first element, optionally followed by queries, consisting
+of two-element lists containing name - value pairs for each query.</ul>
+<h5>Usage</h5>
+<ul>Converts text in uri format to a structured list. Restrictions:<ul>
+<li/>No more than one "?" in uri,
+<li/>No "#" in uri (no fragments),
+<li/>One "=" within each query.
+</ul>
+If the restrictions are not observed, parts of the URI might be discarded.
+</ul>
+</ul>
+
+<h3>httpInitWidget</h3>
+<h4>Synopsis</h4>
+<ul><b>httpInitWidget</b> <i>name scripting</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td><i>name</i></td><td>Widget name.</td></tr>
+<tr><td><i>scripting</i></td><td>Specifies whether the widget allows scription. Must be set to 1 if The
+widget shall support scripting, otherwise scripting can be omitted or be set to 0.</td></tr>
+</table>
+<h5>Usage</h5>
+<ul>This method creates an array variable and uses the specified widget name as array variable name. This
+array variable will be used to represent the widget within this Tcl extension. Used from several
+<b>http<i>WidgetType</i></b> methods to create a specific widget representation.</ul>
+</ul>
+
+<h3>httpCheckName</h3>
+<h4>Synopsis</h4>
+<ul><b>httpCheckName</b> <i>name local</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td><i>name</i></td><td>Name to be checked.</td></tr>
+<tr><td><i>local</i></td><td>Optional parameter. If 1, local variables are not valid. </td></tr>
+</table>
+<h5>Returns</h5>
+<ul>1 if array variable with the specified name exists, otherwise 0.</ul>
+<h5>Usage</h5>
+<ul>Checks whether the specified name is the name of an array variable or not.<br>
+<b>For internal use.</b></ul>
+</ul>
+
+<h3>httpGetLevel</h3>
+<h4>Synopsis</h4>
+<ul><b>httpGetType</b> <i>name level</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td><i>name</i></td><td>Name of widget or widget detail.</td></tr>
+<tr><td><i>level</i></td><td>Optional parameter: Level in case of local variable name. Default 1.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>Level to be used un upvar or uplevel command to access the specified widget: #0 for globalwidgets and
+the specified level in case of a local widget specification.</ul>
+<h5>Usage</h5>
+<ul>Returns the stack level of the specified widget name. If the name starts with an uppercase letter,
+the return value is #0 for a global widget. Otherwise, a local widget specification will be assumed and
+the specifies level will be returned.<br>
+<b>For internal use.</b></ul>
+</ul>
+
+<h3>httpGetType</h3>
+<h4>Synopsis</h4>
+<ul><b>httpGetType</b> <i>name</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td><i>name</i></td><td>Name of widget or widget detail.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>Name of the type or an empty string if type could not be detected.</ul>
+<h5>Usage</h5>
+<ul>Returns the type of a widget or widget part.<br>
+<b>For internal use.</b></ul>
+</ul>
+
+<h3>httpCreateWidgetAttributes</h3>
+<h4>Synopsis</h4>
+<ul><b>httpCreateWidgetAttributes</b> <i>name</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td><i>name</i></td><td>Widget name.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>String containing the widget specific attributes for the corresponding HTML tag.</ul>
+<h5>Usage</h5>
+<ul>Depending on the array components stored within the array variable that represents the widget, a string
+that can contain the attributes <b>id</b>, <b>class</b> and / or <b>style</b>.<br>
+Attribute <b>id</b> will only be returned if a widget supports scripting and a script has been specified.<br>
+Attribute <b>class</b> will only be returned if a css class has been specified for the widget.<br>
+Attribute <b>style</b> will only be returned if a css style string has been specified for the widget.<br>
+<b>For internal use.</b></ul>
+</ul>
+
+<h3>httpCreateWidgetScript</h3>
+<h4>Synopsis</h4>
+<ul><b>httpCreateWidgetScript</b> <i>name</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td><i>name</i></td><td>Widget name.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>HTML <b>script</b> tag or an empty string.</ul>
+<h5>Usage</h5>
+<ul>This method will be used to create the widget specific <b>script</b> tag. This script defined a variable
+containing the document element corresponding to this widget within the browser. If no script has been bound to
+the widget, an empty string will be returned.<br>
+<b>For internal use.</b></ul>
+</ul>
+
+<h3>httpCreateLink</h3>
+<h4>Synopsis</h4>
+<ul><b>httpCreateLink</b> <i>name vars</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name.</td></tr>
+<tr><td style="vertical-align: top;"><i>vars</i></td><td>List containing name - value pairs from http
+post response or an empty list if no http post response is available.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>HTML text for widget creation.</ul>
+<h5>Usage</h5>
+<ul>This method returns the HTML text to display the widget in a browser: <b>a</b> tag, with
+embedded HTML text of link label.</b></ul>
+</ul>
+
+<h3>httpCreateLabel</h3>
+<h4>Synopsis</h4>
+<ul><b>httpCreateLabel</b> <i>name vars</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name.</td></tr>
+<tr><td style="vertical-align: top;"><i>vars</i></td><td>List containing name - value pairs from http
+post response or an empty list if no http post response is available.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>HTML text for widget creation.</ul>
+<h5>Usage</h5>
+<ul>This method returns the HTML text to display the widget in a browser: <b>span</b> tag, in case of a bitmap label
+with embedded <b>img</b> tag. In case of a text label with scripting enable, followed by a <b>script</b> tag.<br>
+<b>For internal use.</b></ul>
+</ul>
+
+<h3>httpCreateEntry</h3>
+<h4>Synopsis</h4>
+<ul><b>httpCreateEntry</b> <i>name vars</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name.</td></tr>
+<tr><td style="vertical-align: top;"><i>vars</i></td><td>List containing name - value pairs from http
+post response or an empty list if no http post response is available.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>The <b>input</b> tag used to display the entry field within a browser.</ul>
+<h5>Usage</h5>
+<ul>This method will be used to retrieve the html representation of the corresponding entry field.<br>
+<b>For internal use.</b></ul>
+</ul>
+
+<h3>httpCreateButton</h3>
+<h4>Synopsis</h4>
+<ul><b>httpCreateButton</b> <i>name vars</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name.</td></tr>
+<tr><td style="vertical-align: top;"><i>vars</i></td><td>List containing name - value pairs from http
+post response or an empty list if no http post response is available.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>HTML fragment that represents the specified button.</ul>
+<h5>Usage</h5>
+<ul>This method can be used to retrieve the HTML representation of the specified button. It consists of a
+<b>button</b> tag, which contains a the HTML representation of a label, an <b>img</b> tag or some text,
+depending on which arguments have been passed at button creation (text, label or bitmap argument) and
+a <b>script</b> tag if scripting has been specified during widget creation.<br>
+<b>For internal use.</b></ul>
+</ul>
+
+<h3>httpCreateCheckButton</h3>
+<h4>Synopsis</h4>
+<ul><b>httpCreateCheckButton</b> <i>name vars</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name.</td></tr>
+<tr><td style="vertical-align: top;"><i>vars</i></td><td>List containing name - value pairs from http
+post response or an empty list if no http post response is available.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>HTML fragment that represents the specified checkbutton.</ul>
+<h5>Usage</h5>
+<ul>This method can be used to retrieve the HTML representation of the specified checkbutton. It consists of an
+<b>input</b> tag and a <b>script</b> tag if scripting has been specified during widget creation.<br>
+<b>For internal use.</b></ul>
+</ul>
+
+<h3>httpCreateRadioButton</h3>
+<h4>Synopsis</h4>
+<ul><b>httpCreateRadioButton</b> <i>name vars</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name.</td></tr>
+<tr><td style="vertical-align: top;"><i>vars</i></td><td>List containing name - value pairs from http
+post response or an empty list if no http post response is available.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>HTML fragment that represents the specified radiobutton.</ul>
+<h5>Usage</h5>
+<ul>This method can be used to retrieve the HTML representation of the specified radiobutton.
+It consists of an input tag.<br>
+<b>For internal use.</b></ul>
+</ul>
+
+<h3>httpCreateSelect</h3>
+<h4>Synopsis</h4>
+<ul><b>httpCreateSelect</b> <i>name vars</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name.</td></tr>
+<tr><td style="vertical-align: top;"><i>vars</i></td><td>List containing name - value pairs from http
+post response or an empty list if no http post response is available.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>HTML fragment that represents the specified selection entry.</ul>
+<h5>Usage</h5>
+<ul>This method can be used to retrieve the HTML representation of the specified selection entry. It
+consists of an option tag.<br>
+<b>For internal use.</b></ul>
+</ul>
+
+<h3>httpCreateMenu</h3>
+<h4>Synopsis</h4>
+<ul><b>httpCreateMenu</b> <i>name vars</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name.</td></tr>
+<tr><td style="vertical-align: top;"><i>vars</i></td><td>List containing name - value pairs from http
+post response or an empty list if no http post response is available.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>HTML fragment that represents the specified selection menu.</ul>
+<h5>Usage</h5>
+<ul>This method can be used to retrieve the HTML representation of the specified selection menu. It consists of
+a selection tag which contains the option tags of all specified selection entries.<br>
+<b>For internal use.</b></ul>
+</ul>
+
+<h3>httpCreateBlock</h3>
+<h4>Synopsis</h4>
+<ul><b>httpCreateBlock</b> <i>name vars</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name.</td></tr>
+<tr><td style="vertical-align: top;"><i>vars</i></td><td>List containing name - value pairs from http
+post response or an empty list if no http post response is available.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>HTML fragment that represents the specified block.</ul>
+<h5>Usage</h5>
+<ul>This method can be used to retrieve the HTML representation of the specified block. The HTML fragments of all
+widgets belonging to the block will be concatenated. If common style or class has been specified for the block, 
+all these fragments will be packed into a <b>div</b> block.<br>
+<b>For internal use.</b></ul>
+</ul>
+
+<h3>httpCreateTable</h3>
+<h4>Synopsis</h4>
+<ul><b>httpCreateTable</b> <i>name vars</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name.</td></tr>
+<tr><td style="vertical-align: top;"><i>vars</i></td><td>List containing name - value pairs from http
+post response or an empty list if no http post response is available.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>HTML fragment that represents the specified block.</ul>
+<h5>Usage</h5>
+<ul>This method can be used to retrieve the HTML representation of the specified block. The HTML fragments of all
+widgets belonging to the block will be included. Each of these fragments will be surrounded by <b>tr</b> and
+<b>td</b> tags, and all together will be part of a <b>table</b> tag.<br>
+<b>For internal use.</b></ul>
+</ul>
+
+<h3>httpServer</h3>
+<h4>Synopsis</h4>
+<ul><b>httpServer</b> <i>widget fd ip port</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>widget</i></td><td>Name of main widget.</td></tr>
+<tr><td style="vertical-align: top;"><i>fd</i></td><td>Communication socket handle. See Tcl command <b>socket</b> for further details.</td></tr>
+<tr><td style="vertical-align: top;"><i>ip</i></td><td>IP client address. See Tcl command <b>socket</b> for further details.</td></tr>
+<tr><td style="vertical-align: top;"><i>port</i></td><td>Client port. See Tcl command <b>socket</b> for further details.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>Nothing.</ul>
+<h5>Usage</h5>
+<ul>Server socket implementation, see Tcl command <b>socket -server</b> and the section about server sockets for
+further details.<br>
+<b>For internal use.</b></ul>
+</ul>
+
+<h3>httpCloseClient</h3>
+<h4>Synopsis</h4>
+<ul><b>httpCloseClient</b> <i>service fd</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>service</i></td><td>Name of service.</td></tr>
+<tr><td style="vertical-align: top;"><i>fd</i></td><td>Communication socket handle to be closed.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>Nothing.</ul>
+<h5>Usage</h5>
+<ul>Closes a client socket, releases file event handler, removes handle fro service with error checking.<br>
+<b>For internal use.</b></ul>
+</ul>
+
+</ul>
