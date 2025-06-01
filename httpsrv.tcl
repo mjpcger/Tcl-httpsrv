@@ -113,8 +113,12 @@ proc httpLink {name args} {
 				error "Invalid option label in link $name: $val is not a label widget"
 			}
 			if {$level == 1} {
+				global httpBeautifyHtml
 				set option "tagdata"
+				set saveit $httpBeautifyHtml
+				set httpBeautifyHtml 0
 				set val [uplevel 1 "httpCreateLabel $val {}"]
+				set httpBeautifyHtml $saveit
 			}
 		}
 		set opt($option) $val
@@ -135,6 +139,7 @@ proc httpCreateLink {name vars} {
 	if {[uplevel 1 "httpGet $name type"] != {Link}} {
 		error "Bad httpCreateLink widget $name, must be of type Link"
 	}
+	array set postvars $vars
 	upvar [httpGetLevel $name] $name opt
 	if {$opt(label) != ""} {
 		upvar #0 $opt(label) label
@@ -142,7 +147,7 @@ proc httpCreateLink {name vars} {
 	} {
 		set tag $opt(tagdata)
 	}
-	set ret "<a[uplevel 1 "httpCreateWidgetAttributes $name"] href=\"[uplevel 1 "httpAttrText {$opt(target)}"]\">$tag</a>"
+	set ret "[httpDeli [httpGet postvars namespace]]<a[uplevel 1 "httpCreateWidgetAttributes $name"] href=\"[uplevel 1 "httpAttrText {$opt(target)}"]\">$tag</a>"
 	set opt(vars) {}
 	return $ret
 }
@@ -208,8 +213,7 @@ proc httpChangeWidgetText {name text fd} {
 			error "Bad widget $name, must be label, entry, menu or button"
 		}
 	if {$opt(script)} {
-		global httpIO
-		set ret "<script>document.getElementById('[regsub -all "::" $name "_"]').$what = '[regsub -all "'" [httpText $text] "'+\"'\"+'"]'</script>"
+		set ret "[httpDeli $fd]<script>document.getElementById('[regsub -all "::" $name "_"]').$what = '[regsub -all "'" [httpText $text] "'+\"'\"+'"]';</script>"
 		if [catch {puts -nonewline $fd $ret} err] {
 			log warning "httpChangeWidgetText: Cannot change text of widget $name: $err" $fd
 		} {
@@ -227,9 +231,7 @@ proc httpChangeWidgetStyle {name value fd} {
 	upvar [httpGetLevel $name] $name opt
 	
 	if {[httpGet $name "script"] == "1"} {
-		global httpIO
-		
-		set ret "<script>document.getElementById('[regsub -all "::" $name "_"]').style.csstext = 'style', '[regsub -all "'" [httpText $value] "'+\"'\"+'"]';</script>"
+		set ret "[httpDeli $fd]<script>document.getElementById('[regsub -all "::" $name "_"]').style.csstext = '[regsub -all "'" [httpText $value] "'+\"'\"+'"]';</script>"
 		if [catch {puts -nonewline $fd $ret} err] {
 			log warning "httpChangeWidgetStyle: Cannot change style of widget $name: $err" $fd
 		} {
@@ -248,8 +250,7 @@ proc httpChangeWidgetClass {name class fd} {
 	upvar [httpGetLevel $name] $name opt
 	
 	if {[httpGet $name "script"] == "1"} {
-		global httpIO
-		set ret "<script>document.getElementById('[regsub -all "::" $name "_"]').ckassName = '$class';</script>"
+		set ret "[httpDeli $fd]<script>document.getElementById('[regsub -all "::" $name "_"]').ckassName = '$class';</script>"
 		if [catch {puts -nonewline $fd $ret} err] {
 			log warning "httpChangeWidgetClass: Cannot change class of widget $name: $err" $fd
 		} {
@@ -266,6 +267,7 @@ proc httpCreateLabel {name vars} {
 		error "Bad httpLabel widget $name, must be of type Label"
 	}
 	upvar [httpGetLevel $name] $name opt
+	array set postvars $vars
 	
 	set ret [uplevel 1 "httpCreateWidgetAttributes $name"]
 	if {$opt(bitmap) == ""} {
@@ -290,7 +292,7 @@ proc httpCreateLabel {name vars} {
 		append ret " />"
 	}
 	set opt(vars) {}
-	return $ret
+	return "[httpDeli [httpGet postvars namespace]]$ret"
 }
 
 # httpEntry: Define values for an entry fied. Allowed options:
@@ -371,9 +373,7 @@ proc httpEntry {name args} {
 #	returns the corresponding html document fragment
 proc httpCreateEntry {name vars} {
 	upvar [httpGetLevel $name] $name opt
-	if [llength $vars] {
-		array set postvars $vars
-	}
+	array set postvars $vars
 	
 	if {[uplevel 1 "httpGet $name type"] != {Entry}} {
 		error "Bad httpCreateEntry widget $name, must be of type Entry"
@@ -392,7 +392,7 @@ proc httpCreateEntry {name vars} {
 	}
 	set opt(vars) $opt(varname)
 	append ret " />"
-	return $ret
+	return "[httpDeli [httpGet postvars namespace]]$ret"
 }
 
 # httpButton: Define values for a button. Allowed options:
@@ -451,7 +451,11 @@ proc httpButton {name args} {
 			error "Invalid httpButton option label $lb in button $name"
 		}
 		if {$level == 1} {
+			global httpBeautifyHtml
+			set saveit $httpBeautifyHtml
+			set httpBeautifyHtml 0
 			set opt(tagdata) [uplevel 1 "$lbopt(create) $opt(label) {}"]
+			set httpBeautifyHtml $saveit
 			set opt(label) ""
 		}
 	}
@@ -465,11 +469,13 @@ proc httpButton {name args} {
 #	returns the corresponding html document fragment
 proc httpCreateButton {name vars} {
 	upvar [httpGetLevel $name] $name opt
+	array set postvars $vars
 	
 	if {[httpGet $name "type"] != {Button}} {
 		error "Bad httpButton widget $name, must be of type Button"
 	}
 	set opt(vars) [set varname [regsub -all "::" $opt(name) "_"]]
+	set ret "[httpDeli [httpGet postvars namespace] +]<button[httpCreateWidgetAttributes $name] type=\"submit\" name=\"$varname\" value=\"Pressed\">"
 	if {$opt(label) != ""} {
 		upvar #0 $opt(label) lbopt
 		set lbl [$lbopt(create) $opt(label) $vars]
@@ -480,7 +486,8 @@ proc httpCreateButton {name vars} {
 		set lbl "[httpText $opt(text)]"
 	}
 	set opt(vars) [lsort -unique $opt(vars)]
-	return "<button[httpCreateWidgetAttributes $name] type=\"submit\" name=\"$varname\" value=\"Pressed\">$lbl</button>"
+	append ret "[httpDeli [httpGet postvars namespace]]$lbl"
+	return "$ret[httpDeli [httpGet postvars namespace] -]</button>"
 }
 
 # httpCheckButton: Define values for an entry of a check button. Allowed options:
@@ -539,7 +546,7 @@ proc httpCreateCheckButton {name vars} {
 		set checked " checked"
 	}
 	set opt(vars) $opt(varname)
-	return "<input[httpCreateWidgetAttributes $name] type=\"checkbox\" name=\"$opt(varname)\" value=\"[httpAttrText $opt(onvalue)]\"$checked />"
+	return "[httpDeli [httpGet postvars namespace]]<input[httpCreateWidgetAttributes $name] type=\"checkbox\" name=\"$opt(varname)\" value=\"[httpAttrText $opt(onvalue)]\"$checked />"
 }
 
 # httpGet: Return value of array variable created by httpsrv extension. 
@@ -591,9 +598,7 @@ proc httpRadioButton {name args} {
 #	returns the corresponding html document fragment.
 proc httpCreateRadioButton {name vars} {
 	upvar [httpGetLevel $name] $name opt
-	if [llength $vars] {
-		array set postvars $vars
-	}
+	array set postvars $vars
 	
 	if {[httpGet $name "type"] != {RdButton}} {
 		error "Bad httpRadioButton widget, must be of type RdButton"
@@ -607,7 +612,7 @@ proc httpCreateRadioButton {name vars} {
 		set selected " checked"
 	}
 	set opt(vars) $opt(varname)
-	return "<input[httpCreateWidgetAttributes $name] type=\"radio\" name=\"$opt(varname)\" value=\"[httpAttrText $opt(value)]\"$selected />"
+	return "[httpDeli [httpGet postvars namespace]]<input[httpCreateWidgetAttributes $name] type=\"radio\" name=\"$opt(varname)\" value=\"[httpAttrText $opt(value)]\"$selected />"
 }
 
 # httpMenu: Define values for a selection menu. Allowed options:
@@ -665,12 +670,12 @@ proc httpMenu {name args} {
 #	returns the corresponding html document fragment.
 proc httpCreateMenu {name vars} {
 	upvar [httpGetLevel $name] $name opt
+	array set postvars $vars
 	
 	if {[httpGet $name "type"] != {Menu}} {
 		error "Bad httpMenu widget, must be of type Menu"
 	}
 	if [llength $vars] {
-		array set postvars $vars
 		if {[array names postvars -exact $opt(varname)] == $opt(varname)} {
 			set currvar $postvars($opt(varname))
 		}
@@ -678,23 +683,24 @@ proc httpCreateMenu {name vars} {
 	if [catch {set currvar}] {
 		set currvar $opt(defaultvalue)
 	}
-	set ret "<select[httpCreateWidgetAttributes $name] name=\"$opt(varname)\""
+	set ret "[httpDeli [httpGet postvars namespace] +]<select[httpCreateWidgetAttributes $name] name=\"$opt(varname)\""
 	if {[httpGet $name "button"] != ""} {
 		upvar [httpGetLevel $opt(button)] $opt(button) btn
 		append ret " onchange = \"btn = document.getElementById('$btn(varname)');"
-		append ret " btn.type='submit'; btn.value='Pressed'; btn.click();\">"
+		append ret " btn.type='submit'; btn.value='Pressed'; btn.click();btn.type='hidden';\">"
 	} {
 		append ret ">"
 	}
+	append ret "[httpDeli [httpGet postvars namespace]]<button><selectedcontent></selectedcontent></button>"
 	foreach se $opt(entries) {
 		lassign $se val text
-		append ret "<option id=\"$opt(varname)\" value=\"[httpAttrText $val]\""
+		append ret "[httpDeli [httpGet postvars namespace]]<option id=\"$opt(varname)\" value=\"[httpAttrText $val]\""
 		if {$val == $currvar} {
 			append ret " selected"
 		}
 		append ret ">[httpText $text]</option>"
 	}
-	append ret "</select>"
+	append ret "[httpDeli [httpGet postvars namespace] -]</select>"
 	set opt(vars) $opt(varname)
 	return $ret
 }
@@ -728,7 +734,11 @@ proc httpBlock {name args} {
 					unset opt
 					error "Bad httpBlock element $wd in block $name"
 				} elseif {$level == 1} {
+					global httpBeautifyHtml
+					set saveit $httpBeautifyHtml
+					set httpBeautifyHtml 0
 					lset value $i [list "tag" [uplevel 1 "$wdopt(create) $wd {}"]]
+					set httpBeautifyHtml $saveit
 				}
 			}
 		}
@@ -757,7 +767,11 @@ proc httpBlockAppend {name elements {tag {}}} {
 		if {$level == "#0"} {
 			lappend opt(elements) $wd
 		} {
+			global httpBeautifyHtml
+			set saveit $httpBeautifyHtml
+			set httpBeautifyHtml 0
 			lappend opt(elements) [list "tag" [uplevel 1 "$wdopt(create) $wd {}"]]
+			set httpBeautifyHtml $saveit
 		}
 	}
 	if {$tag != ""} {
@@ -770,21 +784,21 @@ proc httpBlockAppend {name elements {tag {}}} {
 #	returns the corresponding html document fragment.
 proc httpCreateBlock {name vars} {
 	upvar [httpGetLevel $name] $name opt
+	array set postvars $vars
 	
 	if {[uplevel 1 "httpGet $name type"] != {Block}} {
 		error "Bad httpBlock widget, must be of type Block"
 	}
 	if {$opt(style) != "" || $opt(class) != "" || $opt(script) == "1"} {
-		set ret "<span[uplevel 1 "httpCreateWidgetAttributes $name"]>"
-		set retend "</span>"
+		set prefix "[httpDeli [httpGet postvars namespace] +]<span[uplevel 1 "httpCreateWidgetAttributes $name"]>"	
 	} {
-		set ret ""
-		set retend ""
+		set prefix ""
 	}
+	set ret ""
 	set opt(vars) {}
 	foreach elem $opt(elements) {
 		if {[llength $elem] == 2 && [lindex $elem 0] == "tag"} {
-			append ret [lindex $elem 1]
+			append ret "[httpDeli [httpGet postvars namespace]][lindex $elem 1]"
 		} {
 			upvar #0 $elem elemopt
 			append ret [$elemopt(create) $elem $vars]
@@ -792,7 +806,12 @@ proc httpCreateBlock {name vars} {
 		}
 	}
 	set opt(vars) [lsort -unique $opt(vars)]
-	return "$ret$retend"
+	if {$prefix != ""} {
+		set retend "[httpDeli [httpGet postvars namespace] -]</span>"
+	} {
+		set retend ""
+	}
+	return "$prefix$ret$retend"
 }
 
 # httpTable: Defines values for a table containing other widgets
@@ -875,7 +894,11 @@ proc httpPlace {table entry row column} {
 		for {set y $startcolumn} {$y <= $endcolumn} {incr y} {
 			if {$x == $startrow && $y == $startcolumn} {
 				if {$level == 1} {
-					lset matrix $x $y [list ">[uplevel 1 "$enopt(create) $entry {}"]</td>" $endrow $endcolumn]
+					global httpBeautifyHtml
+					set saveit $httpBeautifyHtml
+					set httpBeautifyHtml 0
+					lset matrix $x $y [list ">[uplevel 1 "$enopt(create) $entry {}"]" $endrow $endcolumn]
+					set httpBeautifyHtml $saveit
 				} {
 					lset matrix $x $y [list $entry $endrow $endcolumn]
 				}
@@ -892,11 +915,12 @@ proc httpPlace {table entry row column} {
 #	returns the corresponding html document fragment.
 proc httpCreateTable {name vars} {
 	upvar [httpGetLevel $name] $name opt
+	array set postvars $vars
 	
 	if {[uplevel 1 "httpGet $name type"] != {Table}} {
 		error "Bad httpTable widget, must be of type Table"
 	}
-	set ret "<table[uplevel 1 "httpCreateWidgetAttributes $name"]>"
+	set ret "[httpDeli [httpGet postvars namespace] +]<table[uplevel 1 "httpCreateWidgetAttributes $name"]>"
 	set columns {}
 	set rows {}
 	for {set i 0} {$i < [llength $opt(matrix)]} {incr i} {
@@ -920,7 +944,7 @@ proc httpCreateTable {name vars} {
 	}
 	set opt(vars) {}
 	foreach i $rows {
-		append ret "<tr>"
+		append ret "[httpDeli [httpGet postvars namespace] +]<tr>"
 		foreach j $columns {
 			set elem [lindex $opt(matrix) $i $j]
 			if {[llength $elem] == 3} {
@@ -934,7 +958,7 @@ proc httpCreateTable {name vars} {
 				for {set k [lsearch $columns $j]} {$k < $len && [lindex $columns $k] <= [lindex $elem 2]} {incr k} {
 					incr colspan
 				}
-				append ret "<td"
+				append ret "[httpDeli [httpGet postvars namespace] +]<td"
 				if {$colspan > 1} {
 					append ret " colspan=\"$colspan\"" 
 				}
@@ -943,19 +967,20 @@ proc httpCreateTable {name vars} {
 				}
 				if {[string first ">" [set widget [lindex $elem 0]]] != 0} {
 					upvar #0 $widget elemopt
-					append ret ">[$elemopt(create) $elemopt(name) $vars]</td>"
+					append ret ">[$elemopt(create) $elemopt(name) $vars]"
 					append opt(vars) " " $elemopt(vars)
 				} {
-					append ret $widget
+					append ret "[httpDeli [httpGet postvars namespace]]$widget"
 				}
+				append ret "[httpDeli [httpGet postvars namespace] -]</td>"
 			} elseif {$elem == ""} {
-				append ret "<td/>"
+				append ret "[httpDeli [httpGet postvars namespace]]<td/>"
 			}
 		}
-		append ret "</tr>"
+		append ret "[httpDeli [httpGet postvars namespace] -]</tr>"
 	}
 	set opt(vars) [lsort -unique $opt(vars)]
-	return "$ret</table>"
+	return "$ret[httpDeli [httpGet postvars namespace] -]</table>"
 }
 
 # httpCreateService: Creates service structure
@@ -1076,39 +1101,43 @@ proc httpServer {service fd ip port} {
 		variable pathqueries
 		variable addedvars {}
 		variable addedwidgets
+		variable beautyspaces ""
 	}
-	set watchdog [after 5000 "
+	set watchdog [after 15000 "
 		catch {close $fd}
 		log info {Request abort by watchdog: Invalid or missing header} $fd
 	"]
 	namespace upvar $fd post vars pathqueries what
 	log info "httpServer for $service connected on port $srv(port) from $ip:$port" $fd
-	fconfigure $fd -translation crlf -encoding $httpEncoding -buffering none
-	gets $fd rqline
-	set what [httpNormalize [string range [lindex $rqline 1] 1 end]]
-	set file [lindex $what 0]
-	eval "set file $file"
-	log info "Request: $rqline, Object: $what" $fd
-	if {[llength $rqline] != 3 || [string range [lindex $rqline 2] 0 4] != "HTTP/"} {
-		namespace delete $fd
-		log warning "Ignore invalid request"
+	fconfigure $fd -translation crlf -encoding $httpEncoding -buffering none -blocking 0
+	getline $fd rqline
+	set err [catch {
+		set what [httpNormalize [string range [lindex $rqline 1] 1 end]]
+		set file [lindex $what 0]
+		eval "set file $file"
+	} txt]
+	if {$err || [llength $rqline] != 3 || [string range [lindex $rqline 2] 0 4] != "HTTP/"} {
+		catch {namespace delete $fd}
+		log warning "Request: $rqline, ignore invalid request, err: $txt" $fd
+		after cancel $watchdog
 		after 10000 "catch {close $fd}"
 		return
 	}
-	while {[set line [gets $fd]] != ""} {
+	log info "Request: $rqline, Object: $what" $fd
+	while {[namespace exists $fd] && [getline $fd line] != 0} {
 		log debug $line $fd
 		if {[lindex [set line [split $line :]] 0] == "Content-Length" && [scan [lindex $line 1] "%d%s" len s] == 1} {
 			set postlen $len
 		}
 	}
+	if {[namespace exists $fd] == 0} return
 	after cancel $watchdog
 	lappend srv(fds) $fd
 	if {[lindex $rqline 0] == "POST"} {
 		if {[catch {expr $postlen + 0}]} {
-			fconfigure $fd -blocking 0
 			after 100 "catch {incr [set fd]::trigger}"
 			if [catch {vwait [set fd]::trigger}] {
-				log warning "Request timed out"
+				log warning "Request timed out" $fd
 				return
 			}
 			set erg [catch {read $fd; fconfigure $fd -blocking 1} params]
@@ -1174,7 +1203,7 @@ proc httpServer {service fd ip port} {
 					if {[array names wdg -exact "type"] == "type" && [array names wdg -exact "precommand"] == "precommand"} {
 						if [catch {apply [list {service widget socket} $wdg(precommand)] $service $varname $fd} ret opt] {
 							array set errorinfo $opt
-							log error "Error in precommand:\n$errorinfo(-errorinfo)" "$fd - $varname"
+							log error "Error in precommand:\n$errorinfo(-errorinfo)" "$fd - $varname" $fd
 						} {
 							log info "Next widget: '$ret'" $fd
 						}
@@ -1187,7 +1216,10 @@ proc httpServer {service fd ip port} {
 				}
 			}
 		}
+	} {
+		array unset vars
 	}
+	set vars(namespace) $fd
 	if {$widx < 0} {
 		if {$what == ""} {
 			set widx 0
@@ -1213,23 +1245,29 @@ proc httpServer {service fd ip port} {
 				log error "Error in precommand:\n$errorinfo(-errorinfo)" "$fd - $command(precommand)"
 			}
 		}
-		set body {<!DOCTYPE html><html lang="de"><head><meta charset="utf-8"/>}
+		set body "[httpDeli $fd]<!DOCTYPE html>"
+		append body "[httpDeli $fd +]<html lang=\"de\">"
+		append body "[httpDeli $fd +]<head>"
+		append body "[httpDeli $fd]<meta charset=\"utf-8\"/>"
 		if {[set title [httpGet widget "title"]] != ""} {
-			append body "<title>[httpText $title]</title>"
+			append body "[httpDeli $fd]<title>[httpText $title]</title>"
 		}
 		foreach css $cssfiles {
 			append body [format {<link href="%s" rel="stylesheet">} [encoding convertto utf-8 $css]]
 		}
 		if {[llength $cssclasses] > 0} {
-			append body "<style>"
+			append body "[httpDeli $fd +]<style>"
 			foreach css $cssclasses {
-				append body "[lindex $css 0] {[encoding convertto utf-8 [lindex $css 1]]}" 
+				append body "[httpDeli $fd][lindex $css 0] {[encoding convertto utf-8 [lindex $css 1]]}" 
 			}
-			append body "</style>"
+			append body "[httpDeli $fd -]</style>"
 		}
-		set pageid "<input type=\"hidden\" id=\"$service\" name=\"$service\" value=\"$widget\" />"
-		append pageid "<input type=\"hidden\" id=\"[set service]DynamicVars\" name=\"[set service]DynamicVars\" />"
-		append body [format {</head><body><form action="" method="post">%s%s} $pageid [$wdg(create) $widget [array get vars]]]
+		append body "[httpDeli $fd -]</head>"
+		append body "[httpDeli $fd +]<body>"
+		append body "[httpDeli $fd +]<form action=\"\" method=\"post\">"
+		append body "[httpDeli $fd]<input type=\"hidden\" id=\"$service\" name=\"$service\" value=\"$widget\" />"
+		append body "[httpDeli $fd]<input type=\"hidden\" id=\"[set service]DynamicVars\" name=\"[set service]DynamicVars\" />"
+		append body [$wdg(create) $widget [array get vars]]
 		set resp "HTTP/1.1 200 OK"
 		append resp "\r\nContent-Type: text/html; charset=utf-8"
 		append resp "$\r\nConnection: close"
@@ -1239,6 +1277,7 @@ proc httpServer {service fd ip port} {
 		} {
 			lappend [set fd]::addedwidgets $widget
 			log debug "START OF PAGE $widget: $resp" $fd
+			set finished 1
 			if {[array names vars] != ""} {
 				foreach varname [array names vars] {
 					if {$vars($varname) == "Pressed"} {
@@ -1251,34 +1290,25 @@ proc httpServer {service fd ip port} {
 							if [catch {apply [list {service widget socket} $wdg(command)] $service $varname $fd} ret opt] {
 								array set errorinfo $opt
 								log error "Error in command:\n$errorinfo(-errorinfo)" "$fd - $varname"
+							} elseif {[scan $ret "%d%s" val s] == 1 && $val == 0} {
+								set finished 0
 							}
 						}
 						break
 					}
 				}
 			}
-			if {[array names command "command"] == "command"} {
+			if {[array names command "command"] == "command" && $finished} {
 				if [catch {apply [list {service socket page} $command(command)] $service $fd $widget} ret opt] {
 					array set errorinfo $opt
 					log error "Error in command:\n$errorinfo(-errorinfo)" "$fd - $command(command)"
+				} elseif {[scan $ret "%d%s" val s] == 1 && $val == 0} {
+					set finished 0
 				}
-			}
-			if [catch {puts -nonewline $fd [set part {</form></body></html>}]} err] {
-			
-				log warning "Error sending final http response part: $err" $fd
-			} {
-				log debug "$part :END OF PAGE $widget"
 			}
 		}
-		after 100 "catch {incr [set fd]::trigger}"
-		if {[catch {vwait [set fd]::trigger}] == 0} {
-			httpCloseClient $service $fd
-			if {[array names command "postcommand"] == "postcommand"} {
-				if [catch {apply [list {service socket page} $command(postcommand)] $service $fd $widget} ret opt] {
-					array set errorinfo $opt
-					log error "Error in postcommand:\n$errorinfo(-errorinfo)" "$fd - $command(postcommand)"
-				}
-			}
+		if $finished {
+			finalizePageRequest $service $widget $fd
 		}
 	} elseif {[file readable $file] && [catch {open $file r} ffd] == 0 && [catch {file size $file} flen] == 0} {
 		set ext [string range [file extension $file] 1 end]
@@ -1300,7 +1330,7 @@ proc httpServer {service fd ip port} {
 				set type "video/webm"
 			} {
 				close $ffd
-				log error "Resource invalid"
+				log error "Resource invalid" $fd
 				set resp "HTTP/1.1 403 Forbidden"
 				append resp "\r\nContent-Type: text/html"
 				append resp "\r\nConnection: close"
@@ -1312,17 +1342,16 @@ proc httpServer {service fd ip port} {
 				if [catch {puts -nonewline $fd $resp} err] {
 					log warning "Error sending http response: $err" $fd
 				} {
-					log debug "START INVALID FILE $file: $resp :END INVALID FILE $file"
+					log debug "START INVALID FILE $file: $resp :END INVALID FILE $file" $fd
 				}
-				after 100 "catch {incr [set fd]::trigger}"
-				if {[catch {vwait [set fd]::trigger}] == 0} {
-					httpCloseClient $service $fd
-					set type ""
-				}
+				after 100 "
+					catch {httpCloseClient $service $fd}
+					catch {namespace delete $fd}"
+				set type ""
 			}
 		}
 		if {$type != ""} {
-			log info "File $file present"
+			log info "File $file present" $fd
 			if {[string range $type 0 3] == "text"} {
 				fconfigure $ffd -blocking 1 -buffering none -buffersize 1000 -encoding $httpEncoding -translation auto
 				set flen 0
@@ -1347,11 +1376,13 @@ proc httpServer {service fd ip port} {
 						} {
 							httpCloseClient $service $ofd
 							close $ifd
+							namespace delete $fd
 						}
 					} err] {
 						log warning "Error sending http response for input handle $ifd: $err" $ofd
-						httpCloseClient $service $ofd
-						close $ifd
+						catch {httpCloseClient $service $ofd}
+						catch {close $ifd}
+						catch {namespace delete $fd}
 					}					
 				}] $ffd $fd $service]
 			}]
@@ -1365,14 +1396,40 @@ proc httpServer {service fd ip port} {
 		if {[catch {puts -nonewline $fd $resp} err]} {
 			log warning "Error sending http response: $err" $fd
 		} {
-			log debug  "START NOT FOUND: $resp :END NOT FOUND"
+			log debug  "START NOT FOUND: $resp :END NOT FOUND" $fd
 		}
-		after 100 "catch {incr [set fd]::trigger}"
-		if {[catch {vwait [set fd]::trigger}] == 0} {
-			httpCloseClient $service $fd
-		}
+		after 100 "
+			catch {httpCloseClient $service $fd}
+			catch {namespace delete $fd}
+		"
 	}
-	catch {namespace delete $fd}
+}
+
+proc finalizePageRequest {service widget socket {delay 100}} {
+	if {$delay != 0} {
+		set part "[httpDeli $socket -]</form>"
+		append part "[httpDeli $socket -]</body>"
+		append part "[httpDeli $socket -]</html>"
+		if [catch {puts -nonewline $socket $part} err] {			
+			log warning "Error sending final http response part: $err" $socket
+		} {
+			log debug "$part :END OF PAGE $widget" $socket
+		}
+		after $delay "finalizePageRequest $service $widget $socket 0"
+	} {
+		httpCloseClient $service $socket
+		upvar #0 $service srv
+		array set cmd [lindex $srv(pagelist) [lsearch -exact -index 0 $srv(pagelist) $widget] 1 2]
+		uplevel 1 {
+			if {[array names command "postcommand"] == "postcommand"} {
+				if [catch {apply [list {service socket page} $command(postcommand)] $service $socket $widget} ret opt] {
+					array set errorinfo $opt
+					log error "Error in postcommand:\n$errorinfo(-errorinfo)" "$socket - $command(postcommand)"
+				}
+			}
+		}
+		catch {namespace delete $socket}
+	}
 }
 
 # Append HTML code of a widget to 
@@ -1393,7 +1450,7 @@ proc httpAppendCurrentPage {name current fd widget} {
 	} {
 		set newvars $vars
 		set data "[uplevel 1 "$create $widget {[array get val]}"]"
-		append data "<script>"
+		append data "[httpDeli $fd]<script>"
 		if {$widgets == ""} {
 			set newvars [set vars {}]
 			append data "$name.value = '$widget';"
@@ -1407,7 +1464,7 @@ proc httpAppendCurrentPage {name current fd widget} {
 		if {[catch {puts $fd $data} msg] > 0} {
 			log warning "Error sending additional http response part: $msg" $fd
 		} {
-			log debug $data
+			log debug $data $fd
 			append vars " $newvars"
 			append widgets " $widget"
 		}
@@ -1426,20 +1483,22 @@ proc httpClearCurrentPage {name current fd} {
 	} elseif {[httpGet $current "script"] != 1} {
 		error "httpClearCurrentPage: $current does not support clear page function"
 	}
-	set data "<span id='removeit'><h1>Place Holder</h1></span><script>"
+	set data "[httpDeli $fd]<span id='removeit'><h1>Place Holder</h1></span>"
+	append data "[httpDeli $fd +]<script>"
 	namespace upvar $fd addedwidgets widgets
 	foreach widget [lrange $widgets 0 end] {
 		if {[httpGet $widget "script"] != 1} {
-			log warning $fd "Warning: Widget $widget will not be deactivated: Scripting not enabled"
+			log warning "Warning: Widget $widget will not be deactivated: Scripting not enabled" $fd
 		} {
-			append data "document.getElementById('[regsub -all "::" $widget "_"]').remove();"
+			append data "[httpDeli $fd]document.getElementById('[regsub -all "::" $widget "_"]').remove();"
 		}
 	}
-	append data "$name.value = '';</script>"
+	append data "[httpDeli $fd]$name.value = '';"
+	append data "[httpDeli $fd -]</script>"
 	if {[catch {puts $fd $data} msg] > 0} {
 		log warning "Error sending clear page command: $msg" $fd
 	} {
-		log debug $data
+		log debug $data $fd
 		set page(vars) ""
 		set widgets {}
 	}
@@ -1457,10 +1516,8 @@ proc httpStopService {service} {
 			fileevent $fd readable {}
 			fileevent $fd writable {}
 		}
-		catch {
-			close $fd
-			namespace delete $fd
-		}
+		catch {close $fd}
+		catch {namespace delete $fd}
 	}
 	unset srv(sfd)
 	unset srv(fds)
@@ -1527,4 +1584,35 @@ proc log {level text {source {}}} {
 
 proc httpAuthCallback {what} {
 	return 1
+}
+
+proc getline {fd var} {
+	fileevent $fd readable "fileevent $fd readable {};set [set fd]::trigger 0"
+	vwait [set fd]::trigger
+	if [catch {uplevel 1 "gets $fd $var"} retval] {
+		log warning "Error reading line from socket: $retval" $fd
+		uplevel 1 "set $var {}"
+		set retval -1
+	}
+	return $retval
+}
+
+set httpBeautifyHtml 0
+
+proc httpDeli {space {level " "}} {
+	global httpBeautifyHtml
+	
+	if $httpBeautifyHtml {
+		namespace upvar $space beautyspaces bs
+		if {$level == "-"} {
+			set bs [string range $bs $httpBeautifyHtml end]
+		}
+		set ret "\n$bs"
+		if {$level == "+"} {
+			append bs [string range "                    " 1 $httpBeautifyHtml]
+		}
+		return $ret
+	} {
+		return ""
+	}
 }

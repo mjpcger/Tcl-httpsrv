@@ -59,6 +59,10 @@ corresponding widget name and use it as path - part of the URI. in this situatio
 perform authorization and validation via the precommand and command scripts bound to these pages and /
 or included buttons.<p>
 <h2>Contents</h2>
+<ul>Global Variables
+<ul>Have been described <a href="#variables"><i>here</i></a>.
+</ul>
+</ul>
 <ul>Client Namespace
 <ul><a href="#socket"><i>socket</i></a>: Client socket namespace, used for browser communication.
 </ul>
@@ -105,18 +109,46 @@ Internally Used Methods
 <a href="#InternalUse">Further Methods for Internal Use</a>
 </ul>
 
+</ul><h2 id="variables">Global Variables</h2><ul>
+Global variables have been defined for some simple configuration issues. Here a list of global variables
+and how to use them:
+<table>
+<tr><td><h5>Name</h5></td><td><h5>Usage</h5></td></tr>
+<tr><td style="vertical-align: top;">httpBeautifyHtml</td><td>Specifies whether generated
+html code shall be compact (0) or good readable (&gt; 0). Positive values specify the indentation (in
+characters) to use for readability.</td></tr>
+<tr><td style="vertical-align: top;">httpEncoding</td><td>Specifies the encoding used
+for binary file access. Depending on the Tcl version, encoding is <i>binary</i> (version &lt; 9) or
+<i>iso8859-1</i> otherwise. This valus should not be changed.</td></tr>
+<tr><td style="vertical-align: top;">httpIO</td><td>Contains a list of channel identifiers to be used
+for logging output. Default: stderr - the console output. </td></tr>
+<tr><td style="vertical-align: top;">httpLoggingTypes</td><td>Holds all possible logging levels, from
+level with no logging output (<b>none</b>) to maximum output (<b>debug</b>). Currently allowed values are <b>none</b>, 
+<b>error</b>, <b>info</b>, <b>warning</b> and <b>debug</b>. Should not be changed.</td></tr>
+<tr><td style="vertical-align: top;">httpLogLevel</td><td>Logging level to be used. Default value is
+<b>info</b>, <b>debug</b> should only be used during development and testing.</td></tr>
+</table>
 </ul><h2 id="socket">Client Namespace</h2><ul>
 The service can accept several connections with several browser instances at the same time. The Client
 socket bound to each communication channel acts as a unique communication instance identifier and this
 extension uses it as namespace name for client specific stuff.<br>
 Currently, only the following namespace variables have been defined:<ul>
 <table>
+<tr><td style="vertical-align: top;">addedvars:</td><td>Internally used list variable. Holds varname
+components of all widgets added via <a href="#httpAppendCurrentPage">httpAppendCurrentPage</a> that holds
+a value.</td></tr>
+<tr><td style="vertical-align: top;">addedwidgets:</td><td>Internally used list variable. Holds names
+of all widgets added via <a href="#httpAppendCurrentPage">httpAppendCurrentPage</a>.</td></tr>
+<tr><td style="vertical-align: top;">beautyspaces:</td><td>Internally used variable, should not be
+modified. Holds some spaces for logging purposes, see global variable <b>httpBeautifyHtml</b> and
+<b>httpBeautifySpacing</b>.</td></tr>
 <tr><td style="vertical-align: top;">pathqueries:</td><td>A list containing path and query elements
 of the URL used to start the current request. Starts with the path, followed by two-element lists
 containing name and value passed via the URL line. All components encoded in unicode. For more
 detailed information, see <a href="#httpNormalize">httpNormalize</a>.</td></tr>
 <tr><td style="vertical-align: top;">post:</td><td>An array variable that contains the contents
-of a HPPT POST body. Element names are the value names and their values the corresponding values.</td></tr>
+of a HPPT POST body. Element names are the value names and their values the corresponding values.<br>
+In addition, post contains always the client namespace name in element <b>namespace</b>.</td></tr>
 <tr><td style="vertical-align: top;">trigger:</td><td>Internally used variable used for timeout
 handling of client communication. Contents must be an integer value. Can be used within command
 scripts, but must not be used in asynchronous processings to avoid malfunction of
@@ -259,7 +291,17 @@ command will be called after the page specified by <b>precommand</b> has been se
 client socket will be closed. Within this command, function <a
 href="#httpChangeWidgetText">httpChangeWidgetText</a> can be used to change the text of text labels created
 with argument {script 1}. In addition, function <a href="#httpChangeWidgetStyle">httpChangeWidgetStyle</a>
-can be used to change the style of all widgets created with argument {script 1}.</ul><td></tr>
+can be used to change the style of all widgets created with argument {script 1}. Furthermore, function
+<a href="#httpAppendCurrentPage">httpAppendCurrentPage</a> and <a href="httpClearCurrentPage">
+httpClearCurrentPage</a> can be used to modify the current web page.<br>
+This command shall return any non-zero value whenever all necessary page processing has been finished. If
+parts of the page processing shall be processed asynchronously, e.g. via fileevent or after scripts, the
+command must return 0 and the script running the final page processing must call function
+<a href="#finalizePageRequest">finalizePageRequest</a> to free all resoures and to run any postcommand
+script. In addition, any page specific command script will not be executed in this case because command
+scripts specified via <a href="#httpAddPage">httpAddPage</a> or <a href="#httpCreateService">httpCreateService</a>
+if previous widget specific precommand or widget specific command scripts have been finished.
+</ul><td></tr>
 <tr><td style="vertical-align: top;">placeholder:</td><td>String to be shown whenever the entry field is empty,<td></tr>
 <tr><td style="vertical-align: top;">precommand:</td><td>Command to be executed when hidden entry has been
 mutated to a submit button and clicked via Javascrip by menu. For further details, see
@@ -325,7 +367,14 @@ command will be called after the page specified by <b>precommand</b> has been se
 client socket will be closed. Within this command, function <a
 href="#httpChangeWidgetText">httpChangeWidgetText</a> can be used to change the text of text labels created
 with argument {script 1}. In addition, function <a href="#httpChangeWidgetStyle">httpChangeWidgetStyle</a>
-can be used to change the style of all widgets created with argument {script 1}.</ul><td></tr>
+can be used to change the style of all widgets created with argument {script 1}.<br>
+This command shall return any non-zero value whenever all necessary page processing has been finished. If
+parts of the page processing shall be processed asynchronously, e.g. via fileevent or after scripts, the
+command must return 0 and the script running the final page processing must call function
+<a href="#finalizePageRequest">finalizePageRequest</a> to free all resoures and to run any postcommand
+script. In addition, any page specific command script will not be executed in this case because command
+scripts specified via <a href="#httpAddPage">httpAddPage</a> or <a href="#httpCreateService">httpCreateService</a>
+if previous widget specific precommand or widget specific command scripts have been finished.</ul><td></tr>
 <tr><td style="vertical-align: top;">label:</td><td>Name of httpLabel variable describing the button <a href="#httpLabel">label</a>,<td></tr>
 <tr><td style="vertical-align: top;">precommand:</td><td>Command to be executed when button has been pressed. It will be used as body of a procedure with
 the arguments <b>service</b>, <b>widget</b> and <b>socket</b>, where<table>
@@ -627,6 +676,15 @@ the body tag has been closed. These scripts can be used to modify page contents 
 <a href="#httpChangeWidgetStyle">httpChangeWidgetStyle</a>,
 <a href="#httpAppendCurrentPage">httpAppendCurrentPage</a> or
 <a href="#httpClearCurrentPage">httpClearCurrentPage</a>.<br>
+This command shall return any non-zero value whenever all necessary page processing has been finished. If
+parts of the page processing shall be processed asynchronously, e.g. via fileevent or after scripts, the
+command must return 0 and the script running the final page processing must call function
+<a href="#finalizePageRequest">finalizePageRequest</a> to free all resoures and to run any postcommand
+script. In addition, any page specific command script will not be executed in this case because command
+scripts specified via <a href="#httpAddPage">httpAddPage</a> or <a href="#httpCreateService">httpCreateService</a>
+if previous widget specific precommand or widget specific command scripts have been finished.<br>
+Furthermore, scripts specified with <b>command</b> will not be processed if a previously button or
+hidden entry specific command script has started asynchronously running processing parts.<br>
 Scripts specified with <b>postcommand</b> will be called after all elements of a page have been sent,
 after the client socket has been closed, but before the corresponding namespace will be deleted. This
 script can be used for server background processing. Page manipulations are not possible within a
@@ -775,6 +833,32 @@ of two-element lists containing name - value pairs for each query.</ul>
 </ul>
 If the restrictions are not observed, parts of the URI might be discarded.
 </ul>
+</ul>
+
+<h3 id="finalizePageRequest">finalizePageRequest</h3>
+<h4>Synopsis</h4>
+<ul><b>finalizePageRequest</b> <i>name scripting</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td><i>service</i></td><td>Service name.</td></tr>
+<tr><td><i>widget</i></td><td>Name of page widget.</td></tr>
+<tr><td><i>socket</i></td><td>Client socket name, request specific namespace name as well.</td></tr>
+<tr><td><i>delay</i></td><td>Delay in milliseconds to start finalization. Default: 100. Can be set to
+0 to force immediate finalization.</td></tr>
+</table>
+<h5>Usage</h5>
+<ul> This method will be called to finish HTTP page processing. It will be called internally whenever
+no page or button specific command script returned 0. Keep in mind: Every command script that starts
+delayed execution, e.g. via fileevent or after scripts, without synchronization must return 0 and must
+ensure that finalizePageRequest will be called within the delayed execution script running last.<br> 
+
+Finalization means:<ul>
+<li/>Deactivation of socket read and write event handlers, if any.
+<li/>Closing client socket,
+<li/>Removing socket from client socket list ($<b>servicename</b>(fds)),
+<li/>Calling widget specific <b>postcommand</b> script,
+<li/>Delete the client namespace.
+</ul></ul>
 </ul>
 
 <h3>httpInitWidget</h3>
