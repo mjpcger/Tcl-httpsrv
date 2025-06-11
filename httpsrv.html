@@ -13,8 +13,10 @@ Global widgets can be used to represent a web page to be shown by a browser of y
 to a service - also represented by a global array variable. A service can be created with a service port
 and a widget representing the main page to be shown whenever <b>localhost:<i>port</i></b> will be typed into
 the address line of the browser.<br>
-Button widgets can have a command and a precommand script argument. Both arguments are a function body
-called by the service whenever the button has been pressed:<ul><li/>The precommand script can be used
+Button widgets and hidden entry widgets can have a command and a precommand script argument. Both arguments are a function body
+called by the service whenever service activation has been requested. In case of button widgets, this will
+be the case whenever the button has been pressed, in case of hidden entry widgets, whenever the corresponding
+check button, radio button or menu has been changed:<ul><li/>The precommand script can be used
 to specify the page to be sent next. Typically, it uses the http response to verify which page shall be
 displayed next.<li/>The command script will be called after the next web page has been sent, but before
 the <b>body</b> tag has been closed. This allows the script to add further HTML code to the page or to
@@ -275,8 +277,9 @@ two elenents, where the first element specifies a name and the second element th
 following names will be supported:<table>
 <tr><td style="vertical-align: top;">class:</td><td>CSS class name,<td></tr>
 <tr><td style="vertical-align: top;">command:</td><td>Command to be executed when hidden entry has been
-mutated to a submit button and clicked via Javascrip by menu. For further details, see
-<a href="#httpMenu">httpMenu</a>. It will be used as body of a procedure with
+mutated to a submit button and clicked via Javascrip by check button, radio button or menu. For further
+details, see <a href="#httpCheckButton">httpCheckButton</a>. <a href="#httpRadioButton">httpRadioButton</a>
+or <a href="#httpMenu">httpMenu</a>. It will be used as body of a procedure with
 the arguments <b>service</b>, <b>widget</b> and <b>socket</b>, where<table>
 <tr><td style="vertical-align: top;"><b>service</b>:</td><td>Name of the service. A global array variable with that name contains all relevant information.
 Element <b>port</b> holds the TCP port number of the service, element <b>pagelist</b> holds a list of names
@@ -304,8 +307,9 @@ if previous widget specific precommand or widget specific command scripts have b
 </ul><td></tr>
 <tr><td style="vertical-align: top;">placeholder:</td><td>String to be shown whenever the entry field is empty,<td></tr>
 <tr><td style="vertical-align: top;">precommand:</td><td>Command to be executed when hidden entry has been
-mutated to a submit button and clicked via Javascrip by menu. For further details, see
-<a href="#httpMenu">httpMenu</a> It will be used as body of a procedure with
+mutated to a submit button and clicked via Javascrip by menu.  For further details, see
+<a href="#httpCheckButton">httpCheckButton</a>. <a href="#httpRadioButton">httpRadioButton</a>
+or <a href="#httpMenu">httpMenu</a>. It will be used as body of a procedure with
 the arguments <b>service</b>, <b>widget</b> and <b>socket</b>, where<table>
 <tr><td style="vertical-align: top;"><b>service</b>:</td><td>Name of the service. A global array variable with that name contains all relevant information.
 Element <b>port</b> holds the TCP port number of the service, element <b>pagelist</b> holds a list of names
@@ -414,6 +418,8 @@ script via function <a href="#httpChangeWidgetStyle">httpChangeWidgetStyle</a>.
 <tr><td style="vertical-align: top;"><i>args</i></td><td>Argument list, each argument containing a list with
 two elenents, where the first element specifies a name and the second element the corresponding value. The
 following names will be supported:<br>
+button: Hidden entry widget. If specified, this value will be mutated into a just clicked button whenever the
+button has been changed,<br>
 class: CSS class name,<br>
 defaultvalue: Default value, must equal onvalue or an empty string,<br>
 onvalue: Value if selected,<br>
@@ -440,6 +446,8 @@ script of a <a href="#httpButton">httpButton</a> widget via function
 <tr><td style="vertical-align: top;"><i>args</i></td><td>Argument list, each argument containing a list with
 two elenents, where the first element specifies a name and the second element the corresponding value. The
 following names will be supported:<br>
+button: Hidden entry widget. If specified, this value will be mutated into a just clicked button whenever the
+button has been clicked,<br>
 class: CSS class name,<br>
 defaultvalue: Default value of varname.<br>
 script: 0 or 1 (default: 0),<br>

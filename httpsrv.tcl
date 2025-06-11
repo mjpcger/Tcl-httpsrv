@@ -231,7 +231,7 @@ proc httpChangeWidgetStyle {name value fd} {
 	upvar [httpGetLevel $name] $name opt
 	
 	if {[httpGet $name "script"] == "1"} {
-		set ret "[httpDeli $fd]<script>document.getElementById('[regsub -all "::" $name "_"]').style.csstext = '[regsub -all "'" [httpText $value] "'+\"'\"+'"]';</script>"
+		set ret "[httpDeli $fd]<script>document.getElementById('[regsub -all "::" $name "_"]').style.cssText = '[regsub -all "'" [httpText $value] "'+\"'\"+'"]';</script>"
 		if [catch {puts -nonewline $fd $ret} err] {
 			log warning "httpChangeWidgetStyle: Cannot change style of widget $name: $err" $fd
 		} {
@@ -503,6 +503,7 @@ proc httpCheckButton {name args} {
 	set opt(onvalue) "ON"
 	set opt(defaultvalue) ""
 	set opt(varname) [regsub -all "::" $name "_"]
+	set opt(button) ""
 	set allowedOptions [array names opt]
 	foreach elem $args {
 		if {[llength $elem] != 2 || [lsearch -exact $allowedOptions [set option [lindex $elem 0]]] < 0} {
@@ -510,6 +511,14 @@ proc httpCheckButton {name args} {
 			error "Bad httpCheckButton option {$elem} in check button $name"
 		}
 		set opt($option) [lindex $elem 1]
+		if {$option == "button"} {
+			upvar [set level [httpGetLevel $opt(button)]] $opt(button) btopt
+			if {$level == 1 || [httpGet $opt(button) type] != "Entry" || [httpGet $opt(button) view] != "hidden"} {
+				set bt $opt(button)
+				unset opt
+				error "Invalid httpCheckButton option button $bt in check button $name"
+			}
+		}
 	}
 	if {[lsearch -regexp [list "$opt(varname)"] {.*[^a-zA-Z0-9_].*}] >= 0} {
 		set vn $opt(varname)
@@ -546,7 +555,13 @@ proc httpCreateCheckButton {name vars} {
 		set checked " checked"
 	}
 	set opt(vars) $opt(varname)
-	return "[httpDeli [httpGet postvars namespace]]<input[httpCreateWidgetAttributes $name] type=\"checkbox\" name=\"$opt(varname)\" value=\"[httpAttrText $opt(onvalue)]\"$checked />"
+	set ret "[httpDeli [httpGet postvars namespace]]<input[httpCreateWidgetAttributes $name] type=\"checkbox\" name=\"$opt(varname)\" value=\"[httpAttrText $opt(onvalue)]\"$checked"
+	if {[httpGet $name "button"] != ""} {
+		upvar [httpGetLevel $opt(button)] $opt(button) btn
+		append ret " onchange = \"btn = document.getElementById('$btn(varname)');"
+		append ret " btn.type='submit'; btn.value='Pressed'; btn.click();btn.type='hidden';\""
+	}
+	return "$ret />"
 }
 
 # httpGet: Return value of array variable created by httpsrv extension. 
@@ -575,6 +590,7 @@ proc httpRadioButton {name args} {
 	set opt(value) ""
 	set opt(varname) [regsub -all "::" $name "_"]
 	set opt(defaultvalue) ""
+	set opt(button) ""
 	set allowedOptions [array names opt]
 	foreach elem $args {
 		if {[llength $elem] != 2 || [lsearch -exact $allowedOptions [set option [lindex $elem 0]]] < 0} {
@@ -582,6 +598,14 @@ proc httpRadioButton {name args} {
 			error "Bad httpRadioButton option {$elem} in radio button $name"
 		}
 		set opt($option) [lindex $elem 1]
+		if {$option == "button"} {
+			upvar [set level [httpGetLevel $opt(button)]] $opt(button) btopt
+			if {$level == 1 || [httpGet $opt(button) type] != "Entry" || [httpGet $opt(button) view] != "hidden"} {
+				set bt $opt(button)
+				unset opt
+				error "Invalid httpRadioButton option button $bt in radio button $name"
+			}
+		}
 	}
 	if {[lsearch -regexp [list "$opt(varname)"] {.*[^a-zA-Z0-9_].*}] >= 0} {
 		set vn $opt(varname)
@@ -612,7 +636,13 @@ proc httpCreateRadioButton {name vars} {
 		set selected " checked"
 	}
 	set opt(vars) $opt(varname)
-	return "[httpDeli [httpGet postvars namespace]]<input[httpCreateWidgetAttributes $name] type=\"radio\" name=\"$opt(varname)\" value=\"[httpAttrText $opt(value)]\"$selected />"
+	set ret "[httpDeli [httpGet postvars namespace]]<input[httpCreateWidgetAttributes $name] type=\"radio\" name=\"$opt(varname)\" value=\"[httpAttrText $opt(value)]\"$selected"
+	if {[httpGet $name "button"] != ""} {
+		upvar [httpGetLevel $opt(button)] $opt(button) btn
+		append ret " onchange = \"btn = document.getElementById('$btn(varname)');"
+		append ret " btn.type='submit'; btn.value='Pressed'; btn.click();btn.type='hidden';\""
+	}
+	return "$ret />" 
 }
 
 # httpMenu: Define values for a selection menu. Allowed options:
