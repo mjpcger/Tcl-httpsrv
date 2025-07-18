@@ -1233,7 +1233,7 @@ proc httpServer {service fd ip port} {
 					if {[array names wdg -exact "type"] == "type" && [array names wdg -exact "precommand"] == "precommand"} {
 						if [catch {apply [list {service widget socket} $wdg(precommand)] $service $varname $fd} ret opt] {
 							array set errorinfo $opt
-							log error "Error in precommand:\n$errorinfo(-errorinfo)" "$fd - $varname" $fd
+							log error "Error in precommand:\n$errorinfo(-errorinfo)" "$fd - $varname"
 						} {
 							log info "Next widget: '$ret'" $fd
 						}
