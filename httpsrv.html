@@ -80,6 +80,7 @@ Widget Creation
 <ul>
 <a href="#httpLink">httpLink</a>: <br>
 <a href="#httpLabel">httpLabel</a>: <br>
+<a href="#httpTextArea">httpTextArea</a>: <br>
 <a href="#httpEntry">httpEntry</a>: <br>
 <a href="#httpButton">httpButton</a>: <br>
 <a href="#httpCheckButton">httpCheckButton</a>: <br>
@@ -263,6 +264,44 @@ If argument {script 1} has been specified, the text of a text label can be chang
 script of a <a href="#httpButton">httpButton</a> widget via function
 <a href="#httpChangeWidgetText">httpChangeWidgetText</a> and the style of the widget can be changed within
 the <b>command</b> script via function <a href="#httpChangeWidgetStyle">httpChangeWidgetStyle</a>.
+</ul>
+</ul>
+
+<h3 id="httpTextArea">httpTextArea</h3>
+<h4>Synopsis</h4>
+<ul><b>httpTextArea</b> <i>name args</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name.</td></tr>
+<tr><td style="vertical-align: top;"><i>args</i></td><td>Argument list, each argument containing a list with
+two elenents, where the first element specifies a name and the second element the corresponding value. The
+following names will be supported:<table>
+<tr><td style="vertical-align: top;">class:</td><td>CSS class name,</td></tr>
+<tr><td style="vertical-align: top;">columns:</td><td>Horizontal size of text area field, in characters (default: 80),</td></tr>
+<tr><td style="vertical-align: top;">hidden:</td><td>Specifies whether the text area is visible (0) or not (1) (default: 0),</td></tr>
+<tr><td style="vertical-align: top;">maxlen:</td><td>Maximum number of characters within text area (default: unlimited),</td></tr>
+<tr><td style="vertical-align: top;">placeholder:</td><td>String to be shown whenever the text area field is empty,</td></tr>
+<tr><td style="vertical-align: top;">readonly:</td><td>Specifies whether the text area is read only (0) or not (1) (default: 0),</td></tr>
+<tr><td style="vertical-align: top;">rows:</td><td>Vertical size of text area field, in character lines (default: 1),</td></tr>
+<tr><td style="vertical-align: top;">script:</td><td>0 or 1 (default: 0),</td></tr>
+<tr><td style="vertical-align: top;">style:</td><td>CSS style string,</td></tr>
+<tr><td style="vertical-align: top;">value:</td><td>Initial value of the field,</td></tr>
+<tr><td style="vertical-align: top;">varname:</td><td>Value name in HTTP POST message, default widget name,</td></tr>
+<tr><td style="vertical-align: top;">wrap:</td><td>Specifies the wrapping type. If "hard", newline characters within input will be
+submitted to the server. If "soft", line breaks will not be submitted (default: hard).</td></tr>
+</td></tr>
+</table>
+</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>Widget name.</ul>
+<h5>Usage</h5>
+<ul>Creates an entry field with the specified size and initial value. The view specifies which kind of entry
+shall be shown.<br> This widget can be specified in a <a href="#httpLabel">label</a> to bind the label to this widget.<p>
+If argument {script 1} has been specified, the style of the widget can be changed within the <b>command</b>
+script of a <a href="#httpButton">httpButton</a> widget via function
+<a href="#httpChangeWidgetStyle">httpChangeWidgetStyle</a>.
+
 </ul>
 </ul>
 
@@ -559,7 +598,7 @@ script of a <a href="#httpButton">httpButton</a> widget via function
 <h5>Returns</h5>
 <ul>nothing.</ul>
 <h5>Usage</h5>
-<ul>Function can be called to change the text of a text label, a button or the value of an entry field.<br>
+<ul>Function can be called to change the text of a text label, a button, a text area or the value of an entry field.<br>
 Typically called within a <b>command</b> script. The
 corresponding script tag will be sent immediately via the specified socket handle.<br>
 This function does not change the widget itself, it only changes the contents of a widget within a 
@@ -995,6 +1034,22 @@ post response or an empty list if no http post response is available.</td></tr>
 <h5>Usage</h5>
 <ul>This method returns the HTML text to display the widget in a browser: <b>span</b> tag, in case of a bitmap label
 with embedded <b>img</b> tag. In case of a text label with scripting enable, followed by a <b>script</b> tag.<br>
+<b>For internal use.</b></ul>
+</ul>
+
+<h3>httpCreateTextArea</h3>
+<h4>Synopsis</h4>
+<ul><b>httpCreateTextArea</b> <i>name vars</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>name</i></td><td>Widget name.</td></tr>
+<tr><td style="vertical-align: top;"><i>vars</i></td><td>List containing name - value pairs from http
+post response or an empty list if no http post response is available.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>The <b>input</b> tag used to display the text area field within a browser.</ul>
+<h5>Usage</h5>
+<ul>This method will be used to retrieve the html representation of the corresponding text area field.<br>
 <b>For internal use.</b></ul>
 </ul>
 
