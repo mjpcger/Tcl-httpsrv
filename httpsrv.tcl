@@ -209,6 +209,8 @@ proc httpChangeWidgetText {name text fd} {
 			set what "value"
 		} "Button" {
 			set what "innerHTML"
+		} "TextArea" {
+			set what "innerHTML"
 		} default {
 			error "Bad widget $name, must be label, entry, menu or button"
 		}
@@ -292,6 +294,100 @@ proc httpCreateLabel {name vars} {
 		append ret " />"
 	}
 	set opt(vars) {}
+	return "[httpDeli [httpGet postvars namespace]]$ret"
+}
+
+
+# httpEntry: Define values for an entry fied. Allowed options:
+#	style: Style string in css format
+#	class: Css class name
+#	value: Entry contents
+#	rows:  Number of rows to be shown
+#	columns: Number of columns for each row
+#	maxlen: Maximum length of text in text area, in characters
+#	readonly: Specifies that contents can be changed (0) or not (1)
+#	wrap:  One of "hard" or "soft", specifies whether line wrapping characgters shall be submitted
+#		(hard) or not (soft) 
+#	hidden: Specifies whether widget shall be shown (0) or not (1)
+#	varname: Name of variable that holds the contents of the text area
+#	placeholder: String to be shown if entry is empty
+proc httpTextArea {name args} {
+	if {[httpCheckName $name 1]} {
+		error "Cannot create text area $name: Object $name just exists"
+	}
+	upvar [httpGetLevel $name] $name opt
+	uplevel 1 "httpInitWidget $name 1"
+	set opt(value) ""
+	set opt(rows) 1
+	set opt(columns) 80
+	set opt(maxlen) ""
+	set opt(placeholder) ""
+	set opt(readonly) 0
+	set opt(wrap) "hard"
+	set allowedwrap {"hard" "soft"}
+	set opt(hidden) 0
+	set opt(varname) [regsub -all "::" $name "_"]
+	set allowedOptions [array names opt]
+	foreach elem $args {
+		if {[llength $elem] != 2 || [lsearch -exact $allowedOptions [set option [lindex $elem 0]]] < 0} {
+			unset opt
+			error "Bad httpEntry option $elem in entry $name"
+		}
+		set val [lindex $elem 1]
+		if {$option == "wrap" && [lsearch -exact $allowedwrap $val] < 0} {
+			unset opt
+			error "Bad httpTextArea wrap value ($elem) in text area $name"
+		}
+		if {[lsearch -exact {"readonly" "hidden"} $option] >= 0 && ([catch {expr $val + 1}] || $val < 0 || $val > 1)} {
+			unset opt
+			error "Bad httpTextArea $option value ($val) in text area $name"
+		}
+		if {[lsearch -exact {"rows" "columns" "maxlen"} $option] >= 0 && ([catch {expr $val + 1}] || $val <= 0)} {
+			unset opt
+			error "Bad httpTextArea $option value ($val) in text area $name"
+		}
+		set opt($option) $val
+	}
+	if {[lsearch -regexp [list "$opt(varname)"] {.*[^a-zA-Z0-9_].*}] >= 0} {
+		set vn $opt(varname)
+		unset opt
+		error "Option varname $vn in text area $name is invalid"
+	}
+	set opt(name) $name
+	set opt(type) "TextArea"
+	set opt(create) "httpCreateTextArea"
+	return $name
+}
+
+# htmpCreateTextArea: Create html text that specifies the text area
+#	returns the corresponding html document fragment
+proc httpCreateTextArea {name vars} {
+	upvar [httpGetLevel $name] $name opt
+	array set postvars $vars
+	
+	if {[uplevel 1 "httpGet $name type"] != {TextArea}} {
+		error "Bad httpCreateTextArea widget $name, must be of type TextArea"
+	}
+	set ret [format {<textarea%s rows="%s" cols="%s" name="%s"} [uplevel 1 "httpCreateWidgetAttributes $name"] $opt(rows) $opt(columns) $opt(varname)]
+	if {$opt(placeholder) != ""} {
+		append ret " placeholder=\"[httpAttrText $opt(placeholder)]\""
+	}
+	if {$opt(maxlen) != ""} {
+		append ret " maxlength=\"$opt(maxlen)\""
+	}
+	if $opt(hidden) {
+		append ret " hidden"
+	} elseif $opt(readonly) {
+		append ret " readonly"
+	}
+	append ret ">"
+	if {[array names postvars -exact $opt(varname)] == $opt(varname)} {
+		append ret "[httpText $postvars($opt(varname))]"
+	} elseif {$opt(value) != ""} {
+		append ret "[httpText $opt(value)]"
+	}
+	append ret "</textarea>"
+	set opt(vars) $opt(varname)
 	return "[httpDeli [httpGet postvars namespace]]$ret"
 }
 
