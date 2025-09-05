@@ -1713,8 +1713,9 @@ proc httpAuthCallback {what} {
 }
 
 proc getline {fd var} {
-	fileevent $fd readable "fileevent $fd readable {};set [set fd]::trigger 0"
-	vwait [set fd]::trigger
+	if {[catch {fileevent $fd readable "catch {fileevent $fd readable {}};set [set fd]::trigger 0"} err] == 0} {
+		vwait [set fd]::trigger
+	}
 	if [catch {uplevel 1 "gets $fd $var"} retval] {
 		log warning "Error reading line from socket: $retval" $fd
 		uplevel 1 "set $var {}"
