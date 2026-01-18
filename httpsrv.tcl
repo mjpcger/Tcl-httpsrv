@@ -283,7 +283,12 @@ proc httpCreateLabel {name vars} {
 			set mask "<%s%s>%s</%s>%s"
 			set script ""
 		}
-		set ret [format $mask $tagname $ret [httpText $opt(text)] $tagname $script]
+		if {$opt(text) == ""} {
+			set dyntext [httpGet postvars $name]
+		} {
+			set dyntext $opt(text)
+		}
+		set ret [format $mask $tagname $ret [httpText $dyntext] $tagname $script]
 	} {
 		set ret "<img$ret src=\"[httpAttrText $opt(bitmap)]\""
 		if {$opt(text) != ""} {
@@ -1191,8 +1196,6 @@ proc httpAddPage {service name title args} {
 
 # httpStartService: Starts a service.
 #	service: Name of service used in previous calls to httpCreateService and httpAddPage.
-#	loglevel: Logging level, one of "none", "error", "info" or "debug". Specifies which kind
-#		of logging information will be written to the log file specified by the httpIO handle.
 proc httpStartService {service} {
 	upvar #0 $service srv
 	if {[array names srv -exact "port"] != "port" || [array names srv -exact "pagelist"] != "pagelist"} {
@@ -1379,7 +1382,7 @@ proc httpServer {service fd ip port} {
 			append body "[httpDeli $fd]<title>[httpText $title]</title>"
 		}
 		foreach css $cssfiles {
-			append body [format {<link href="%s" rel="stylesheet">} [encoding convertto utf-8 $css]]
+			append body "[httpDeli $fd][format {<link href="%s" rel="stylesheet">} [encoding convertto utf-8 $css]]"
 		}
 		if {[llength $cssclasses] > 0} {
 			append body "[httpDeli $fd +]<style>"
