@@ -149,9 +149,11 @@ modified. Holds some spaces for logging purposes, see global variable <b>httpBea
 of the URL used to start the current request. Starts with the path, followed by two-element lists
 containing name and value passed via the URL line. All components encoded in unicode. For more
 detailed information, see <a href="#httpNormalize">httpNormalize</a>.</td></tr>
-<tr><td style="vertical-align: top;">post:</td><td>An array variable that contains the contents
+
+<tr><td id="post" style="vertical-align: top;">post:</td><td>An array variable that contains the contents
 of a HPPT POST body. Element names are the value names and their values the corresponding values.<br>
-In addition, post contains always the client namespace name in element <b>namespace</b>.</td></tr>
+In addition, post contains always the client namespace name in element <b>namespace</b> and precommand
+scripts can specify the text of specific text labels, see <a href="#httpLabel">httpLabel</a>.</td></tr>
 <tr><td style="vertical-align: top;">trigger:</td><td>Internally used variable used for timeout
 handling of client communication. Contents must be an integer value. Can be used within command
 scripts, but must not be used in asynchronous processings to avoid malfunction of
@@ -261,9 +263,12 @@ text: Label text in case of a text label, alternate text in case of a bitmap lab
 <ul>Creates a text or bitmap label. CSS style and class can be specified as well as a bitmap file and / or a label
 text.<p>
 If argument {script 1} has been specified, the text of a text label can be changed within the <b>command</b>
-script of a <a href="#httpButton">httpButton</a> widget via function
+script of a <a href="#httpButton">httpButton</a> widget or a page widget via function
 <a href="#httpChangeWidgetText">httpChangeWidgetText</a> and the style of the widget can be changed within
-the <b>command</b> script via function <a href="#httpChangeWidgetStyle">httpChangeWidgetStyle</a>.
+the <b>command</b> script via function <a href="#httpChangeWidgetStyle">httpChangeWidgetStyle</a>. In addition,
+if the text of a text label is empty and the label name starts with a capital letter, the text can be set within
+a precommand script of page widget or a <a href="#httpButton">httpButton</a> widget by setting the text in the
+namespace variable <a href="#post">post</a> with the name of the label widget as index.
 </ul>
 </ul>
 
@@ -701,8 +706,8 @@ list with 2 elements: CSS class name followed by corresponding class values,<br>
 list with more than 2 elements: List containing a keyword, followed by command statements. The keyword Must
 be one of <b>precommand</b>, <b>command</b> or <b>postcommand</b> within the first list element. All other
 list elements form the corresponding command.<br>
-Each of the specified commands will be used as body of a procedure with the arguments <b>service</b>
-and <b>socket</b>, where<ul>
+Each of the specified commands will be used as body of a procedure with the arguments <b>service</b>, 
+<b>socket</b>and <b>page</b>, where<ul>
 <table>
 <tr><td style="vertical-align: top;"><b>page</b>:</td><td>Name of the page widget.</td></tr>
 <tr><td style="vertical-align: top;"><b>service</b>:</td><td>Name of the service. A global array variable with
