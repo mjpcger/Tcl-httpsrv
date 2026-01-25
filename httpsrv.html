@@ -399,6 +399,8 @@ script of a <a href="#httpButton">httpButton</a> widget via function
 <tr><td style="vertical-align: top;"><i>args</i></td><td>Argument list, each argument containing a list with
 two elenents, where the first element specifies a name and the second element the corresponding value. The
 following names will be supported:<table>
+<tr><td style="vertical-align: top;">button:</td><td>Hidden entry widget. If specified, the value of this widget will be set to "Pressed" and
+the button value will be changed to the name of the button widget.<td></tr>
 <tr><td style="vertical-align: top;">class:</td><td>CSS class name,<td></tr>
 <tr><td style="vertical-align: top;">command:</td><td>Command to be executed when button has been pressed. It will be used as body of a procedure with
 the arguments <b>service</b>, <b>widget</b> and <b>socket</b>, where<table>
@@ -422,7 +424,8 @@ command must return 0 and the script running the final page processing must call
 <a href="#finalizePageRequest">finalizePageRequest</a> to free all resoures and to run any postcommand
 script. In addition, any page specific command script will not be executed in this case because command
 scripts specified via <a href="#httpAddPage">httpAddPage</a> or <a href="#httpCreateService">httpCreateService</a>
-if previous widget specific precommand or widget specific command scripts have been finished.</ul><td></tr>
+if previous widget specific precommand or widget specific command scripts have been finished.<br>
+The <b>command</b> argument is only valid if no <b>button</b>-argument has been set.</ul><td></tr>
 <tr><td style="vertical-align: top;">label:</td><td>Name of httpLabel variable describing the button <a href="#httpLabel">label</a>,<td></tr>
 <tr><td style="vertical-align: top;">precommand:</td><td>Command to be executed when button has been pressed. It will be used as body of a procedure with
 the arguments <b>service</b>, <b>widget</b> and <b>socket</b>, where<table>
@@ -437,7 +440,8 @@ the client and name of namespace used by the service for communication with a sp
 </table>
 precommand will be called before the requested page will be sent to the client. It can
 return one of the names contained within the pagelist element of the service to specify it as next page to
-be displayed or an empty string for current page.</ul><td></tr>
+be displayed or an empty string for current page.<br>
+The <b>precommand</b> argument is only valid if no <b>button</b>-argument has been set.</ul><td></tr>
 <tr><td style="vertical-align: top;">script:</td><td>0 or 1 (default: 0),<td></tr>
 <tr><td style="vertical-align: top;">style:</td><td>CSS style string,<td></tr>
 <tr><td style="vertical-align: top;">text:</td><td>Button contents in case of a text button, otherwise the alternate text,<td></tr>

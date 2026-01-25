@@ -536,6 +536,7 @@ proc httpButton {name args} {
 	set opt(label) ""
 	set opt(command) ""
 	set opt(precommand) ""
+	set opt(button) ""
 	set allowedOptions [array names opt]
 	foreach elem $args {
 		if {[llength $elem] != 2 || [lsearch -exact $allowedOptions [set option [lindex $elem 0]]] < 0} {
@@ -543,8 +544,19 @@ proc httpButton {name args} {
 			error "Bad httpButton option {$elem} in button $name"
 		}
 		set opt($option) [lindex $elem 1]
+		if {$option == "button"} {
+			upvar [set level [httpGetLevel $opt(button)]] $opt(button) btopt
+			if {$level == 1 || [httpGet $opt(button) type] != "Entry" || [httpGet $opt(button) view] != "hidden"} {
+				set bt $opt(button)
+				unset opt
+				error "Invalid httpCheckButton option button $bt in check button $name"
+			}
+		}
 	}
-	if {$opt(label) != ""} {
+	if {$opt(button) != "" && "$opt(command)$opt(precommand)" != ""} {
+		unset opt
+		error "Invalid combination of button and command or precommand options"
+	} elseif {$opt(label) != ""} {
 		upvar [set level [httpGetLevel $opt(label)]] $opt(label) lbopt
 		if {[lsearch -exact {Label Block Table} [uplevel 1 "httpGet $opt(label) type"]] < 0} {
 			set lb $opt(label)
@@ -576,7 +588,14 @@ proc httpCreateButton {name vars} {
 		error "Bad httpButton widget $name, must be of type Button"
 	}
 	set opt(vars) [set varname [regsub -all "::" $opt(name) "_"]]
-	set ret "[httpDeli [httpGet postvars namespace] +]<button[httpCreateWidgetAttributes $name] type=\"submit\" name=\"$varname\" value=\"Pressed\">"
+	set ret "[httpDeli [httpGet postvars namespace] +]<button[httpCreateWidgetAttributes $name] type=\"submit\" name=\"$varname\""
+	if {[httpGet $name "button"] != ""} {
+		upvar [httpGetLevel $opt(button)] $opt(button) btn
+		append ret " value=\"$opt(button)\" onclick = \"btn = document.getElementById('$btn(varname)');"
+		append ret " btn.value='Pressed';\">"
+	} {
+		append ret " value=\"Pressed\">"
+	}
 	if {$opt(label) != ""} {
 		upvar #0 $opt(label) lbopt
 		set lbl [$lbopt(create) $opt(label) $vars]
