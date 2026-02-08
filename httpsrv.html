@@ -17,8 +17,11 @@ Button widgets and hidden entry widgets can have a command and a precommand scri
 called by the service whenever service activation has been requested. In case of button widgets, this will
 be the case whenever the button has been pressed, in case of hidden entry widgets, whenever the corresponding
 check button, radio button or menu has been changed:<ul><li/>The precommand script can be used
-to specify the page to be sent next. Typically, it uses the http response to verify which page shall be
-displayed next.<li/>The command script will be called after the next web page has been sent, but before
+to specify the page to be sent next.<br>
+If the name the precommand returns is "$EXIT", the precommand signals that it takes over control of the request.
+In this special case, the service finishes request processing immediately because the precommand script must send
+the request specific response in this case.
+<li/>The command script will be called after the next web page has been sent, but before
 the <b>body</b> tag has been closed. This allows the script to add further HTML code to the page or to
 send some Javascript snipets, e.g to modify style attributes or the text of a text widget.
 It is strictly recommended to use only the functions <a href="#httpChangeWidgetText">httpChangeWidgetText</a>,
@@ -366,7 +369,7 @@ the client and name of namespace used by the service for communication with a sp
 </table>
 precommand will be called before the requested page will be sent to the client. It can
 return one of the names contained within the pagelist element of the service to specify it as next page to
-be displayed or an empty string for current page.</ul><td></tr>
+be displayed, an empty string for current page or $EXIT if it takes over request processing.</ul><td></tr>
 <tr><td style="vertical-align: top;">script:</td><td>0 or 1 (default: 0),<td></tr>
 <tr><td style="vertical-align: top;">size:</td><td>Size of entry field, in characters,<td></tr>
 <tr><td style="vertical-align: top;">style:</td><td>CSS style string,<td></tr>
@@ -440,7 +443,7 @@ the client and name of namespace used by the service for communication with a sp
 </table>
 precommand will be called before the requested page will be sent to the client. It can
 return one of the names contained within the pagelist element of the service to specify it as next page to
-be displayed or an empty string for current page.<br>
+be displayed, an empty string for current page or $EXIT if it takes over request processing.<br>
 The <b>precommand</b> argument is only valid if no <b>button</b>-argument has been set.</ul><td></tr>
 <tr><td style="vertical-align: top;">script:</td><td>0 or 1 (default: 0),<td></tr>
 <tr><td style="vertical-align: top;">style:</td><td>CSS style string,<td></tr>

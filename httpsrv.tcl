@@ -1354,6 +1354,7 @@ proc httpServer {service fd ip port} {
 							log error "Error in precommand:\n$errorinfo(-errorinfo)" "$fd - $varname"
 						} {
 							log info "Next widget: '$ret'" $fd
+							if {$ret == {$EXIT}} return
 						}
 						if {[set idx [lsearch -exact -index 0 $srv(pagelist) $ret]] >= 0} {
 							set widx $idx
@@ -1420,12 +1421,12 @@ proc httpServer {service fd ip port} {
 		append resp "\r\nContent-Type: text/html; charset=utf-8"
 		append resp "$\r\nConnection: close"
 		append resp "$\r\n\r\n$body"
+		set finished 1
 		if [catch {puts -nonewline $fd $resp} err] {
 			log warning "Error sending initial http response part: $err" $fd
 		} {
 			lappend [set fd]::addedwidgets $widget
 			log debug "START OF PAGE $widget: $resp" $fd
-			set finished 1
 			if {[array names vars] != ""} {
 				foreach varname [array names vars] {
 					if {$vars($varname) == "Pressed"} {
