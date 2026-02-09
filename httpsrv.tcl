@@ -1459,7 +1459,7 @@ proc httpServer {service fd ip port} {
 		if $finished {
 			finalizePageRequest $service $widget $fd
 		}
-	} elseif {[file readable $file] && [catch {open $file r} ffd] == 0 && [catch {file size $file} flen] == 0} {
+	} elseif {[file readable $file] && [catch {open $file rb} ffd] == 0 && [catch {file size $file} flen] == 0} {
 		set ext [string range [file extension $file] 1 end]
 		if {$ext == "css" || $ext == "html"} {
 			set type "text/$ext; charset=utf-8"
@@ -1501,39 +1501,70 @@ proc httpServer {service fd ip port} {
 		}
 		if {$type != ""} {
 			log info "File $file present" $fd
-			if {[string range $type 0 3] == "text"} {
-				fconfigure $ffd -blocking 1 -buffering none -buffersize 1000 -encoding $httpEncoding -translation auto
-				set flen 0
-			} {
-				fconfigure $ffd -blocking 1 -buffering none -buffersize 1000 -encoding $httpEncoding -translation binary
-			}
+			fconfigure $ffd -blocking 1 -buffering none -buffersize 1000
 			set resp "HTTP/1.1 200 OK"
 			append resp "\r\nContent-Type: $type"
 			if {$flen} {
 				append resp "\r\nContent-Length: $flen"
+				if {$flen > 102400} {
+					append resp "\r\nTransfer-Encoding: chunked"
+				}
 			}
 			append resp "\r\nConnection: close"
 			append resp "\r\n\r\n"
 			set erg [catch {
 				fconfigure $fd -blocking 0
 				puts -nonewline $fd $resp
-				log info "Sending data..." $fd
-				fileevent $fd writable [list apply [list {ifd ofd service} {
-					if [catch {
-						if {[eof $ifd] == 0} {
-							puts -nonewline $ofd [read $ifd 1000]
-						} {
-							httpCloseClient $service $ofd
-							close $ifd
-							namespace delete $fd
+				if {$flen <= 102400} {
+					log info "Sending data..." $fd
+					fileevent $fd writable [list apply [list {ifd ofd service} {
+						if [catch {
+							if {[eof $ifd] == 0} {
+								puts -nonewline $ofd [read $ifd 1000]
+							} {
+								log debug "Sending finished" $ofd
+								httpCloseClient $service $ofd
+								close $ifd
+								namespace delete $ofd
+							}
+						} err] {
+							log warning "Error sending http response for input handle $ifd: $err" $ofd
+							catch {httpCloseClient $service $ofd}
+							catch {close $ifd}
+							catch {namespace delete $ofd}
+						}					
+					}] $ffd $fd $service]
+				} {
+					namespace eval $fd {
+						proc copyChunk {ifd ofd service args} {
+							if [catch {
+								lassign $args remaining count
+								if {$remaining == 0} {
+									log debug "Sending finished" $ofd
+									puts -nonewline $ofd "\r\n0;\r\n\r\n"
+									close $ifd
+									after idle "finalizePageRequest $service {} $ofd 0"
+								} elseif {$remaining < 102400} {
+									log debug "Sending last chunk" $ofd
+									puts -nonewline $ofd "\r\n[format "%x" $remaining];\r\n"
+									fcopy $ifd $ofd -size $remaining -command "[set ofd]::copyChunk $ifd $ofd $service 0"
+								} {
+									log debug "Sending next chunk" $ofd
+									puts -nonewline $ofd "\r\n19000;\r\n"
+									fcopy $ifd $ofd -size 102400 -command "[set ofd]::copyChunk $ifd $ofd $service [expr $remaining - 102400]"
+								}
+							} ret opt] {
+								array set errorinfo $opt
+								log warning "Error in download chunk handlingy:\n$errorinfo(-errorinfo)" $ofd
+								catch {close $ifd}
+								after idle "finalizePageRequest $service {} $ofd 0"
+							}
 						}
-					} err] {
-						log warning "Error sending http response for input handle $ifd: $err" $ofd
-						catch {httpCloseClient $service $ofd}
-						catch {close $ifd}
-						catch {namespace delete $fd}
-					}					
-				}] $ffd $fd $service]
+					}
+					log info "Sending first chunk..." $fd
+					puts -nonewline $fd "19000;\r\n"
+					fcopy $ffd $fd -size 102400 -command "[set fd]::copyChunk $ffd $fd $service [expr $flen-102400]"
+				}
 			}]
 		}
 	} {
