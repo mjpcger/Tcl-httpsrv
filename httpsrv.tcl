@@ -1,6 +1,6 @@
 # httpText: Replace "<" by "&lt;" and "\n" by "<br/>"
 proc httpText text {
-	encoding convertto utf-8 [regsub -all "\[\r\n\]" [regsub -all "\r\n" [regsub -all "<" $text "&lt;"] "<br/>"] "<br/>"]
+	encoding convertto utf-8 [regsub -all "\[\r\n\]" [regsub -all "\r\n" [regsub -all "<" $text "\\&lt;"] "<br/>"] "<br/>"]
 }
 
 # httpAttrText: Replace {"<>} and control characters by their &#...; representation
@@ -273,14 +273,13 @@ proc httpCreateLabel {name vars} {
 	
 	set ret [uplevel 1 "httpCreateWidgetAttributes $name"]
 	if {$opt(bitmap) == ""} {
+		set mask "<%s%s>%s</%s>%s"
 		if {$opt(entry) != ""} {
 			set tagname "label"
 			append ret " for=\"[regsub -all "::" $opt(entry) "_"]\""
-			set mask "<%s%s>%s</%s>%s"
 			set script ""
 		} {
 			set tagname "span"
-			set mask "<%s%s>%s</%s>%s"
 			set script ""
 		}
 		if {$opt(text) == ""} {
