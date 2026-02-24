@@ -1179,6 +1179,7 @@ proc httpAddPage {service name title args} {
 	if {[httpGetLevel $name] == 1 || [array names widget -exact "class"] != "class" || [array names widget -exact "create"] != "create"} {
 		error "httpAddPage: $name is not a valid widget"
 	}
+	eval "$widget(create) $name {}"
 	if {[array names srv -exact "port"] != "port" || [array names srv -exact "pagelist"] != "pagelist"} {
 		error "httpAddPage: $name is not a valid service"
 	}
