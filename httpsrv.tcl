@@ -1553,9 +1553,8 @@ proc httpServer {service fd ip port} {
 									puts -nonewline $ofd "\r\n19000;\r\n"
 									fcopy $ifd $ofd -size 102400 -command "[set ofd]::copyChunk $ifd $ofd $service [expr $remaining - 102400]"
 								}
-							} ret opt] {
-								array set errorinfo $opt
-								log warning "Error in download chunk handlingy:\n$errorinfo(-errorinfo)" $ofd
+							} ret] {
+								log warning "Error in download chunk handlingy: $ret" $ofd
 								catch {close $ifd}
 								after idle "finalizePageRequest $service {} $ofd 0"
 							}
