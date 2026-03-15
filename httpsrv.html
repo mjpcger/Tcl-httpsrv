@@ -251,20 +251,20 @@ script of a <a href="#httpButton">httpButton</a> widget via function
 <tr><td style="vertical-align: top;"><i>args</i></td><td>Argument list, each argument containing a list with
 two elenents, where the first element specifies a name and the second element the corresponding value. The
 following names will be supported:<br>
-bitmap: Name of a file containing the bitmap in case of a bitmap label,<br>
+bitmap: Name of a file containing the image in case of an image label,<br>
 class: CSS class name,<br>
 entry: Name of <a href="#httpCheckButton">checkbox</a>, <a href="#httpEntry">entry</a>, 
 <a href="#httpRadioButton">radiobutton</a> or <a href="#httpMenu">menu</a> to be bound to this label,<br>
 script: 0 or 1 (default: 0),<br>
 style: CSS style string,<br>
-text: Label text in case of a text label, alternate text in case of a bitmap label.<br>
+text: Label text in case of a text label, alternate text in case of an image label.<br>
 </td></tr>
 </table>
 <h5>Returns</h5>
 <ul>Widget name.</ul>
 <h5>Usage</h5>
-<ul>Creates a text or bitmap label. CSS style and class can be specified as well as a bitmap file and / or a label
-text.<p>
+<ul>Creates a text or image label. CSS style and class can be specified as well as a image file and / or a label
+text. Image file format must be jpeg, tiff, bmp, png or svg. <p>
 If argument {script 1} has been specified, the text of a text label can be changed within the <b>command</b>
 script of a <a href="#httpButton">httpButton</a> widget or a page widget via function
 <a href="#httpChangeWidgetText">httpChangeWidgetText</a> and the style of the widget can be changed within

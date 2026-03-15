@@ -479,7 +479,7 @@ proc httpCreateEntry {name vars} {
 		error "Bad httpCreateEntry widget $name, must be of type Entry"
 	}
 	set ret [format {<input%s type="%s" name="%s"} [uplevel 1 "httpCreateWidgetAttributes $name"] $opt(view) $opt(varname)]
-	if {[array names postvars -exact $opt(varname)] == $opt(varname)} {
+	if {[array names postvars -exact $opt(varname)] == $opt(varname) && $opt(command) == "" && $opt(precommand) == ""} {
 		append ret " value=\"[httpAttrText $postvars($opt(varname))]\""
 	} elseif {$opt(value) != ""} {
 		append ret " value=\"[httpAttrText $opt(value)]\""
@@ -592,8 +592,14 @@ proc httpCreateButton {name vars} {
 		upvar [httpGetLevel $opt(button)] $opt(button) btn
 		append ret " value=\"$opt(button)\" onclick = \"btn = document.getElementById('$btn(varname)');"
 		append ret " btn.value='Pressed';\">"
+		if {[httpGet postvars $btn(varname)] == "Pressed"} {
+			set script "<script>document.getElementById('$opt(varname)').focus()</script>"
+		} {
+			set script ""
+		}
 	} {
 		append ret " value=\"Pressed\">"
+		set script ""
 	}
 	if {$opt(label) != ""} {
 		upvar #0 $opt(label) lbopt
@@ -606,7 +612,11 @@ proc httpCreateButton {name vars} {
 	}
 	set opt(vars) [lsort -unique $opt(vars)]
 	append ret "[httpDeli [httpGet postvars namespace]]$lbl"
-	return "$ret[httpDeli [httpGet postvars namespace] -]</button>"
+	append ret "[httpDeli [httpGet postvars namespace] -]</button>"
+	if {$script != ""} {
+		append ret "[httpDeli [httpGet postvars namespace]]$script"
+	}
+	return $ret
 }
 
 # httpCheckButton: Define values for an entry of a check button. Allowed options:
@@ -679,8 +689,19 @@ proc httpCreateCheckButton {name vars} {
 		upvar [httpGetLevel $opt(button)] $opt(button) btn
 		append ret " onchange = \"btn = document.getElementById('$btn(varname)');"
 		append ret " btn.type='submit'; btn.value='Pressed'; btn.click();btn.type='hidden';\""
+		if {[httpGet postvars $btn(varname)] == "Pressed"} {
+			set script "<script>document.getElementById('$opt(varname)').focus()</script>"
+		} {
+			set script ""
+		}
+	} {
+		set script ""
 	}
-	return "$ret />"
+	append ret "/>"
+	if {$script != ""} {
+		append ret "[httpDeli [httpGet postvars namespace]]$script"
+	}
+	return $ret
 }
 
 # httpGet: Return value of array variable created by httpsrv extension. 
@@ -760,8 +781,19 @@ proc httpCreateRadioButton {name vars} {
 		upvar [httpGetLevel $opt(button)] $opt(button) btn
 		append ret " onchange = \"btn = document.getElementById('$btn(varname)');"
 		append ret " btn.type='submit'; btn.value='Pressed'; btn.click();btn.type='hidden';\""
+		if {[httpGet postvars $btn(varname)] == "Pressed"} {
+			set script "<script>document.getElementById('$opt(varname)').focus()</script>"
+		} {
+			set script ""
+		}
+	} {
+		set script ""
 	}
-	return "$ret />" 
+	append ret " />" 
+	if {$script != ""} {
+		append ret "[httpDeli [httpGet postvars namespace]]$script"
+	}
+	return $ret
 }
 
 # httpMenu: Define values for a selection menu. Allowed options:
@@ -837,8 +869,14 @@ proc httpCreateMenu {name vars} {
 		upvar [httpGetLevel $opt(button)] $opt(button) btn
 		append ret " onchange = \"btn = document.getElementById('$btn(varname)');"
 		append ret " btn.type='submit'; btn.value='Pressed'; btn.click();btn.type='hidden';\">"
+		if {[httpGet postvars $btn(varname)] == "Pressed"} {
+			set script "<script>document.getElementById('$opt(varname)').focus()</script>"
+		} {
+			set script ""
+		}
 	} {
 		append ret ">"
+		set script ""
 	}
 	append ret "[httpDeli [httpGet postvars namespace]]<button><selectedcontent></selectedcontent></button>"
 	foreach se $opt(entries) {
@@ -850,6 +888,9 @@ proc httpCreateMenu {name vars} {
 		append ret ">[httpText $text]</option>"
 	}
 	append ret "[httpDeli [httpGet postvars namespace] -]</select>"
+	if {$script != ""} {
+		append ret "[httpDeli [httpGet postvars namespace]]$script"
+	}
 	set opt(vars) $opt(varname)
 	return $ret
 }
@@ -1360,7 +1401,6 @@ proc httpServer {service fd ip port} {
 							set widx $idx
 						}
 					}
-					set vars($varname) ""
 					break
 				}
 			}
@@ -1461,7 +1501,7 @@ proc httpServer {service fd ip port} {
 		}
 	} elseif {[file readable $file] && [catch {open $file rb} ffd] == 0 && [catch {file size $file} flen] == 0} {
 		set ext [string range [file extension $file] 1 end]
-		if {$ext == "css" || $ext == "html"} {
+		if {$ext == "css" || $ext == "html" || $ext == "svg"} {
 			set type "text/$ext; charset=utf-8"
 		} elseif {$ext == "ico"} {
 			set type "image/x-icon"
@@ -1477,6 +1517,8 @@ proc httpServer {service fd ip port} {
 				set type "video/mp4"
 			} elseif {$allowed && ($ext == "webm")} {
 				set type "video/webm"
+			} elseif {$allowed && ($ext == "mp3" || $ext == "aac")} {
+				set type "audio/mpeg"
 			} {
 				close $ffd
 				log error "Resource invalid" $fd
@@ -1500,7 +1542,7 @@ proc httpServer {service fd ip port} {
 			}
 		}
 		if {$type != ""} {
-			log info "File $file present" $fd
+			log info "File $file present, type: $type" $fd
 			fconfigure $ffd -blocking 1 -buffering none -buffersize 1000
 			set resp "HTTP/1.1 200 OK"
 			append resp "\r\nContent-Type: $type"
