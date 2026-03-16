@@ -1501,10 +1501,12 @@ proc httpServer {service fd ip port} {
 		}
 	} elseif {[file readable $file] && [catch {open $file rb} ffd] == 0 && [catch {file size $file} flen] == 0} {
 		set ext [string range [file extension $file] 1 end]
-		if {$ext == "css" || $ext == "html" || $ext == "svg"} {
+		if {$ext == "css" || $ext == "html"} {
 			set type "text/$ext; charset=utf-8"
 		} elseif {$ext == "ico"} {
 			set type "image/x-icon"
+		} elseif {$ext == "svg"} {
+			set type "image/svg+xml"
 		} {
 			set allowed [httpAuthCallback $what]
 			if {$allowed && ($ext == "jpg" || $ext == "jpe" || $ext == "jpeg")} {
