@@ -166,6 +166,7 @@ proc httpLabel {name args} {
 	uplevel 1 "httpInitWidget $name 1"
 	set opt(text) ""
 	set opt(bitmap) ""
+	set opt(tag) ""
 	set opt(entry) ""
 	set allowedOptions [array names opt]
 	foreach elem $args {
@@ -182,10 +183,18 @@ proc httpLabel {name args} {
 			upvar #0 $val lbopt
 			if {[array names lbopt -exact "create"] != "create"} {
 				unset opt
-				error "Invalid option entry in link $name: $val is not a widget"
+				error "Invalid option entry in label $name: $val is not a widget"
 			}
 		}
+		if {"tag" == $option && [lsearch -exact {"svg" "object"} $val] < 0} {
+			unset opt
+			error "Invalid option tag in label $name: $val. Must be svg, img or object"
+		}
 		set opt($option) $val
+	}
+	if {$opt(tag) != "" && [file extension $opt(bitmap)] != ".svg" && [string match -nocase "<SVG*</SVG>" $opt(bitmap)] != 1} {
+		unset opt
+		error "Option tag only valid for svg vector graphic"
 	}
 	set opt(name) $name
 	set opt(type) "Label"
@@ -289,13 +298,31 @@ proc httpCreateLabel {name vars} {
 		}
 		set ret [format $mask $tagname $ret [httpText $dyntext] $tagname $script]
 	} {
-		set ret "<img$ret src=\"[httpAttrText $opt(bitmap)]\""
-		if {$opt(text) != ""} {
-			append ret " alt=\"[httpAttrText $opt(text)]\""
+		if {$opt(tag) == "svg" && [catch {readFile $opt(bitmap) binary} data] == 0} {
+			global httpBeautifyHtml
+			set data [string range $data [string first "<svg" [string tolower $data]]+4 end]
+			if {$httpBeautifyHtml} {
+				set spc [httpDeli [httpGet postvars namespace]]
+				set ret "$spc<$opt(tag)$ret [regsub -all "\n" $data "\n$spc"]"
+			} {
+				set ret "<$opt(tag)$ret [regsub -all "\n *" $data ""]"
+			}
+		} elseif {$opt(tag) == "object"} {
+			if {$opt(text) == ""} {
+				set data [httpText "($opt(bitmap))"]
+			} {
+				set data [httpText $opt(text)]
+			}
+			set ret "<object$ret data=\"[httpAttrText $opt(bitmap)]\" type=\"image/svg+xml\">$data</object>"
 		} {
-			append ret " alt=\"[httpAttrText "($opt(bitmap))"]\""
+			set ret "<img$ret src=\"[httpAttrText $opt(bitmap)]\""
+			if {$opt(text) != ""} {
+				append ret " alt=\"[httpAttrText $opt(text)]\""
+			} {
+				append ret " alt=\"[httpAttrText "($opt(bitmap))"]\""
+			}
+			append ret " />"
 		}
-		append ret " />"
 	}
 	set opt(vars) {}
 	return "[httpDeli [httpGet postvars namespace]]$ret"
