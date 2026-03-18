@@ -303,7 +303,7 @@ proc httpCreateLabel {name vars} {
 			set data [string range $data [string first "<svg" [string tolower $data]]+4 end]
 			if {$httpBeautifyHtml} {
 				set spc [httpDeli [httpGet postvars namespace]]
-				set ret "$spc<$opt(tag)$ret [regsub -all "\n" $data "\n$spc"]"
+				set ret "$spc<$opt(tag)$ret [regsub -all "\n" $data $spc]"
 			} {
 				set ret "<$opt(tag)$ret [regsub -all "\n *" $data ""]"
 			}
