@@ -298,7 +298,9 @@ proc httpCreateLabel {name vars} {
 		}
 		set ret [format $mask $tagname $ret [httpText $dyntext] $tagname $script]
 	} {
-		if {$opt(tag) == "svg" && [catch {readFile $opt(bitmap) binary} data] == 0} {
+		if {$opt(tag) == "svg" && [catch {open $opt(bitmap) rb} fd] == 0} {
+			set data [read $fd]
+			close $fd
 			global httpBeautifyHtml
 			set data [string range $data [string first "<svg" [string tolower $data]]+4 end]
 			if {$httpBeautifyHtml} {
