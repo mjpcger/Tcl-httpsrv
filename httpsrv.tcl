@@ -1530,6 +1530,10 @@ proc httpServer {service fd ip port} {
 		}
 	} elseif {[file readable $file] && [catch {open $file rb} ffd] == 0 && [catch {file size $file} flen] == 0} {
 		set ext [string range [file extension $file] 1 end]
+		namespace eval $fd "
+			variable sourcefd $ffd
+		"
+		namespace upvar $fd sourcefd srcfd
 		foreach pair $what {
 			if {[llength $pair] == 2 && [lsearch -exact {Filter MimeType} [lindex $pair 0]] >= 0} {
 				set px([lindex $pair 0]) [lindex $pair 1]
@@ -1569,6 +1573,7 @@ proc httpServer {service fd ip port} {
 					set type "audio/mpeg"
 				} {
 					close $ffd
+					catch {close $srcfd}
 					log error "Resource invalid" $fd
 					set resp "HTTP/1.1 403 Forbidden"
 					append resp "\r\nContent-Type: text/html"
@@ -1615,6 +1620,7 @@ proc httpServer {service fd ip port} {
 								log debug "Sending finished" $ofd
 								httpCloseClient $service $ofd
 								close $ifd
+								catch {close $srcfd}
 								namespace delete $ofd
 							}
 						} err] {
@@ -1627,6 +1633,7 @@ proc httpServer {service fd ip port} {
 				} {
 					namespace eval $fd {
 						proc copyChunk {ifd ofd service args} {
+							variable sourcefd
 							if [catch {
 								lassign $args remaining count
 								if {$remaining == 0} {
@@ -1634,7 +1641,8 @@ proc httpServer {service fd ip port} {
 									if {$remaining == 0} {
 										puts -nonewline $ofd "\r\n0;\r\n\r\n"
 									}
-									close $ifd
+									catch {close $ifd}
+									catch {close $sourcefd}
 									after idle "finalizePageRequest $service {} $ofd 0"
 								} elseif {0 < $remaining && $remaining < 102400} {
 									log debug "Sending last chunk" $ofd
@@ -1649,13 +1657,21 @@ proc httpServer {service fd ip port} {
 									fcopy $ifd $ofd -size 102400 -command "[set ofd]::copyChunk $ifd $ofd $service $remaining"
 								} {
 									log debug "Finalizing last chunk" $ofd
-									close $ifd
-									fconfigure $ofd -buffersize 102500 -blocking 0
-									puts -nonewline $ofd "[format "%[expr 102400 - $count]s" {}]\r\n0;\r\n\r\n"
+									catch {close $ifd}
+									catch {close $sourcefd}
+									if {[catch {fconfigure $ofd -buffersize 102500 -blocking 0}] == 0} {
+										catch {puts -nonewline $ofd "[format "%[expr 102400 - $count]s" {}]\r\n0;\r\n\r\n"}
+									}
+									after idle "finalizePageRequest $service {} $ofd 0"
 								}
-							} ret] {
-								log warning "Error in download chunk handlingy: $ret" $ofd
+							} ret opt] {
+								array set errorinfo $opt
+								log warning "Error in download chunk handling: $ret" $ofd
+								foreach index [array names errorinfo] {
+									log error "  $index: $errorinfo($index)" $ns
+								}
 								catch {close $ifd}
+								catch {close $sourcefd}
 								after idle "finalizePageRequest $service {} $ofd 0"
 							}
 						}
