@@ -46,6 +46,14 @@ widgets, all other like local widgets.
 Keep in mind that main widgets (almost always a block or a table widget) must be global widgets, as
 well as button, checkbutton, radiobutton, menu widgets and text widgets with dynamically changeable text
 to become accessible to the service.<p>
+This extension supports links to internal files with type jpeg, tiff, png, gif, bmp, mp4, mkv, mov or webm.
+The will be sent without any conversion, but in chunks if the file size exceeds 100 KB. In addition,
+further file types can be supported by setting the mime type within the query part of the link via query Name
+<b>MimeType</b> and a filter pipe can be used to convert the specified file to a supported format via query
+name <b>Filter</b>. Keep in mind: Method <b>httpFilterValidation</b> must be overwritten within the server
+to return 1 to allow the specified filter. By defaut, <b>httpFilterValidation</b> simply returns 0 for
+every filter to disable the filter use. Each filter must be a tcl command that returns the channel identifier
+of a bi-directional pipe.<p>
 This extension supports logging: As default, logging output will be written to stderr, but can be
 redirected. Is set, the global variable <b>httpIO</b> can be set to a writable channel. The following
 logging levels can be selected via global variable <b>httpLogLevel</b>: <b>none</b>, <b>error</b>,
@@ -53,7 +61,7 @@ logging levels can be selected via global variable <b>httpLogLevel</b>: <b>none<
 details.<p>
 Basic authorization support is available through function
 <a href="#httpAuthCallback">httpAuthCallback</a>. This function will be called whenever a client tries
-to load one of the following file types: jpeg, tiff, png, gif, bmp, mp4 or webm. It must return to avoid
+to load one of the following file types: jpeg, tiff, png, gif, bmp, mp4, mkv, mov or webm. It must return zero to avoid
 the download or a non-zero value to allow it. The default implementation returns 1. A service using
 this extension should overwrite this function with a service specific version.<br>
 Keep in mind: Download of css, html and ico files present in the working directory is always possible.

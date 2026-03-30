@@ -1530,65 +1530,82 @@ proc httpServer {service fd ip port} {
 		}
 	} elseif {[file readable $file] && [catch {open $file rb} ffd] == 0 && [catch {file size $file} flen] == 0} {
 		set ext [string range [file extension $file] 1 end]
-		if {$ext == "css" || $ext == "html"} {
-			set type "text/$ext; charset=utf-8"
-		} elseif {$ext == "ico"} {
-			set type "image/x-icon"
-		} elseif {$ext == "svg"} {
-			set type "image/svg+xml"
+		foreach pair $what {
+			if {[llength $pair] == 2 && [lsearch -exact {Filter MimeType} [lindex $pair 0]] >= 0} {
+				set px([lindex $pair 0]) [lindex $pair 1]
+			}
+		}
+		if {[info exists px(Filter)] && [httpFilterValidation $px(Filter)] && [catch $px(Filter) pfd] == 0} {
+			fcopy $ffd $pfd -command "catch {close $ffd}"
+			set ffd $pfd
+			log info "Using filter $px(Filter)" $fd
+			set flen -1
 		} {
-			set allowed [httpAuthCallback $what]
-			if {$allowed && ($ext == "jpg" || $ext == "jpe" || $ext == "jpeg")} {
-				set type "image/jpeg"
-			} elseif {$allowed && ($ext == "tiff" || $ext == "tif")} {
-				set type "image/tiff"
-			} elseif {$allowed && ($ext == "bmp" || $ext == "gif" || $ext == "png")} {
-				set type "image/$ext"
-			} elseif {$allowed && ($ext == "mp4" || $ext == "mkv" || $ext == "mov")} {
-				set type "video/mp4"
-			} elseif {$allowed && ($ext == "webm")} {
-				set type "video/webm"
-			} elseif {$allowed && ($ext == "mp3" || $ext == "aac")} {
-				set type "audio/mpeg"
+			fconfigure $ffd -blocking 1 -buffering none -buffersize 1000
+		}
+		if {[info exists px(MimeType)]} {
+			set type $px(MimeType)
+			log info "Using mime type $px(MimeType)" $fd
+		} {
+			if {$ext == "css" || $ext == "html"} {
+				set type "text/$ext; charset=utf-8"
+			} elseif {$ext == "ico"} {
+				set type "image/x-icon"
+			} elseif {$ext == "svg"} {
+				set type "image/svg+xml"
 			} {
-				close $ffd
-				log error "Resource invalid" $fd
-				set resp "HTTP/1.1 403 Forbidden"
-				append resp "\r\nContent-Type: text/html"
-				append resp "\r\nConnection: close"
-				if $allowed {
-					append resp "\r\n\r\n<body>Resource /$file: Invalid file type</body>"
+				set allowed [httpAuthCallback $what]
+				if {$allowed && ($ext == "jpg" || $ext == "jpe" || $ext == "jpeg")} {
+					set type "image/jpeg"
+				} elseif {$allowed && ($ext == "tiff" || $ext == "tif")} {
+					set type "image/tiff"
+				} elseif {$allowed && ($ext == "bmp" || $ext == "gif" || $ext == "png")} {
+					set type "image/$ext"
+				} elseif {$allowed && ($ext == "mp4" || $ext == "mkv" || $ext == "mov")} {
+					set type "video/mp4"
+				} elseif {$allowed && ($ext == "webm")} {
+					set type "video/webm"
+				} elseif {$allowed && ($ext == "mp3" || $ext == "aac")} {
+					set type "audio/mpeg"
 				} {
-					append resp "\r\n\r\n<body>Resource locked: No authorization</body>"
+					close $ffd
+					log error "Resource invalid" $fd
+					set resp "HTTP/1.1 403 Forbidden"
+					append resp "\r\nContent-Type: text/html"
+					append resp "\r\nConnection: close"
+					if $allowed {
+						append resp "\r\n\r\n<body>Resource /$file: Invalid file type</body>"
+					} {
+						append resp "\r\n\r\n<body>Resource locked: No authorization</body>"
+					}
+					if [catch {puts -nonewline $fd $resp} err] {
+						log warning "Error sending http response: $err" $fd
+					} {
+						log debug "START INVALID FILE $file: $resp :END INVALID FILE $file" $fd
+					}
+					after 100 "
+						catch {httpCloseClient $service $fd}
+						catch {namespace delete $fd}"
+					set type ""
 				}
-				if [catch {puts -nonewline $fd $resp} err] {
-					log warning "Error sending http response: $err" $fd
-				} {
-					log debug "START INVALID FILE $file: $resp :END INVALID FILE $file" $fd
-				}
-				after 100 "
-					catch {httpCloseClient $service $fd}
-					catch {namespace delete $fd}"
-				set type ""
 			}
 		}
 		if {$type != ""} {
 			log info "File $file present, type: $type" $fd
-			fconfigure $ffd -blocking 1 -buffering none -buffersize 1000
 			set resp "HTTP/1.1 200 OK"
 			append resp "\r\nContent-Type: $type"
-			if {$flen} {
+			if {$flen > 0} {
 				append resp "\r\nContent-Length: $flen"
-				if {$flen > 102400} {
-					append resp "\r\nTransfer-Encoding: chunked"
-				}
+			}
+			if {$flen > 102400 || $flen < 0} {
+				append resp "\r\nTransfer-Encoding: chunked"
 			}
 			append resp "\r\nConnection: close"
 			append resp "\r\n\r\n"
 			set erg [catch {
 				fconfigure $fd -blocking 0
 				puts -nonewline $fd $resp
-				if {$flen <= 102400} {
+				if {0 < $flen && $flen <= 102400} {
 					log info "Sending data..." $fd
 					fileevent $fd writable [list apply [list {ifd ofd service} {
 						if [catch {
@@ -1614,17 +1631,27 @@ proc httpServer {service fd ip port} {
 								lassign $args remaining count
 								if {$remaining == 0} {
 									log debug "Sending finished" $ofd
-									puts -nonewline $ofd "\r\n0;\r\n\r\n"
+									if {$remaining == 0} {
+										puts -nonewline $ofd "\r\n0;\r\n\r\n"
+									}
 									close $ifd
 									after idle "finalizePageRequest $service {} $ofd 0"
-								} elseif {$remaining < 102400} {
+								} elseif {0 < $remaining && $remaining < 102400} {
 									log debug "Sending last chunk" $ofd
 									puts -nonewline $ofd "\r\n[format "%x" $remaining];\r\n"
 									fcopy $ifd $ofd -size $remaining -command "[set ofd]::copyChunk $ifd $ofd $service 0"
-								} {
+								} elseif {$count == 102400} {
 									log debug "Sending next chunk" $ofd
 									puts -nonewline $ofd "\r\n19000;\r\n"
-									fcopy $ifd $ofd -size 102400 -command "[set ofd]::copyChunk $ifd $ofd $service [expr $remaining - 102400]"
+									if {$remaining > 0} {
+										set remaining [expr $remaining - 102400]
+									}
+									fcopy $ifd $ofd -size 102400 -command "[set ofd]::copyChunk $ifd $ofd $service $remaining"
+								} {
+									log debug "Finalizing last chunk" $ofd
+									close $ifd
+									fconfigure $ofd -buffersize 102500 -blocking 0
+									puts -nonewline $ofd "[format "%[expr 102400 - $count]s" {}]\r\n0;\r\n\r\n"
 								}
 							} ret] {
 								log warning "Error in download chunk handlingy: $ret" $ofd
@@ -1836,6 +1863,10 @@ proc log {level text {source {}}} {
 
 proc httpAuthCallback {what} {
 	return 1
+}
+
+proc httpFilterValidation {filter} {
+	return 0
 }
 
 proc getline {fd var} {
