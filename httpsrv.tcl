@@ -1668,7 +1668,7 @@ proc httpServer {service fd ip port} {
 								array set errorinfo $opt
 								log warning "Error in download chunk handling: $ret" $ofd
 								foreach index [array names errorinfo] {
-									log error "  $index: $errorinfo($index)" $ns
+									log error "  $index: $errorinfo($index)" $ofd
 								}
 								catch {close $ifd}
 								catch {close $sourcefd}
