@@ -228,7 +228,7 @@ proc httpChangeWidgetText {name text fd} {
 		if [catch {puts -nonewline $fd $ret} err] {
 			log warning "httpChangeWidgetText: Cannot change text of widget $name: $err" $fd
 		} {
-			log debug "SEND WIDGET TEXT: $ret" "$fd"
+			log debug "SEND WIDGET TEXT: [encoding convertfrom utf-8 $ret]" "$fd"
 		}
 	}
 	return ""
@@ -246,7 +246,7 @@ proc httpChangeWidgetStyle {name value fd} {
 		if [catch {puts -nonewline $fd $ret} err] {
 			log warning "httpChangeWidgetStyle: Cannot change style of widget $name: $err" $fd
 		} {
-			log debug "SEND WIDGET STYLE: $ret" "$fd"
+			log debug "SEND WIDGET STYLE: [encoding convertfrom utf-8 $ret]" "$fd"
 		}
 	}
 	return ""
@@ -265,7 +265,7 @@ proc httpChangeWidgetClass {name class fd} {
 		if [catch {puts -nonewline $fd $ret} err] {
 			log warning "httpChangeWidgetClass: Cannot change class of widget $name: $err" $fd
 		} {
-			log debug "SEND WIDGET CLASS: $ret" "$fd"
+			log debug "SEND WIDGET CLASS: [encoding convertfrom utf-8 $ret]" "$fd"
 		}
 	}
 	return ""
@@ -1495,7 +1495,7 @@ proc httpServer {service fd ip port} {
 			log warning "Error sending initial http response part: $err" $fd
 		} {
 			lappend [set fd]::addedwidgets $widget
-			log debug "START OF PAGE $widget: $resp" $fd
+			log debug "START OF PAGE $widget: [encoding convertfrom utf-8 $resp]" $fd
 			if {[array names vars] != ""} {
 				foreach varname [array names vars] {
 					if {$vars($varname) == "Pressed"} {
@@ -1579,14 +1579,14 @@ proc httpServer {service fd ip port} {
 					append resp "\r\nContent-Type: text/html"
 					append resp "\r\nConnection: close"
 					if $allowed {
-						append resp "\r\n\r\n<body>Resource /$file: Invalid file type</body>"
+						append resp "\r\n\r\n<body>Resource /[encoding converto utf-8 $file]: Invalid file type</body>"
 					} {
 						append resp "\r\n\r\n<body>Resource locked: No authorization</body>"
 					}
 					if [catch {puts -nonewline $fd $resp} err] {
 						log warning "Error sending http response: $err" $fd
 					} {
-						log debug "START INVALID FILE $file: $resp :END INVALID FILE $file" $fd
+						log debug "START INVALID FILE $file: [encoding convertfrom utf-8 $resp] :END INVALID FILE $file" $fd
 					}
 					after 100 "
 						catch {httpCloseClient $service $fd}
@@ -1687,11 +1687,11 @@ proc httpServer {service fd ip port} {
 		set resp "HTTP/1.1 404 Not Found"
 		append resp "\r\nContent-Type: text/html; charset=utf-8"
 		append resp "\r\nConnection: close"
-		append resp "\r\n\r\n<body>Resource /$file not found</body>"
+		append resp "\r\n\r\n<body>Resource /[encoding convertto utf-8 $file] not found</body>"
 		if {[catch {puts -nonewline $fd $resp} err]} {
 			log warning "Error sending http response: $err" $fd
 		} {
-			log debug  "START NOT FOUND: $resp :END NOT FOUND" $fd
+			log debug  "START NOT FOUND: [encoding convertfrom utf-8 $resp] :END NOT FOUND" $fd
 		}
 		after 100 "
 			catch {httpCloseClient $service $fd}
@@ -1759,7 +1759,7 @@ proc httpAppendCurrentPage {name current fd widget} {
 		if {[catch {puts $fd $data} msg] > 0} {
 			log warning "Error sending additional http response part: $msg" $fd
 		} {
-			log debug $data $fd
+			log debug [encoding convertfrom utf-8 $data] $fd
 			append vars " $newvars"
 			append widgets " $widget"
 		}
@@ -1793,7 +1793,7 @@ proc httpClearCurrentPage {name current fd} {
 	if {[catch {puts $fd $data} msg] > 0} {
 		log warning "Error sending clear page command: $msg" $fd
 	} {
-		log debug $data $fd
+		log debug [encoding convertfrom utf-8 $data] $fd
 		set page(vars) ""
 		set widgets {}
 	}
