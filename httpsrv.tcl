@@ -1540,7 +1540,20 @@ proc httpServer {service fd ip port} {
 			}
 		}
 		if {[info exists px(Filter)] && [httpFilterValidation $px(Filter)] && [catch $px(Filter) pfd] == 0} {
-			fcopy $ffd $pfd -command "catch {close $ffd}"
+			namespace eval $fd {
+				proc closeFilter {args} {
+					lassign $args fd ofd service count
+					if {[catch {close $fd} erg] == 0} {
+						log debug "$count bytes sent to filter" $service
+					} {
+						log warning "Error closing filter at byte $count: $erg" $service
+					}
+					if {[catch {chan close $ofd write} erg]} {
+						after 5 "catch {close $ofd}"
+					}
+				}
+			}
+			fcopy $ffd $pfd -command "[set fd]::closeFilter $ffd $pfd $fd"
 			set ffd $pfd
 			log info "Using filter $px(Filter)" $fd
 			set flen -1
