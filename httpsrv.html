@@ -46,14 +46,13 @@ widgets, all other like local widgets.
 Keep in mind that main widgets (almost always a block or a table widget) must be global widgets, as
 well as button, checkbutton, radiobutton, menu widgets and text widgets with dynamically changeable text
 to become accessible to the service.<p>
-This extension supports links to internal files with type jpeg, tiff, png, gif, bmp, mp4, mkv, mov or webm.
-The will be sent without any conversion, but in chunks if the file size exceeds 100 KB. In addition,
-further file types can be supported by setting the mime type within the query part of the link via query Name
-<b>MimeType</b> and a filter pipe can be used to convert the specified file to a supported format via query
-name <b>Filter</b>. Keep in mind: Method <b>httpFilterValidation</b> must be overwritten within the server
-to return 1 to allow the specified filter. By defaut, <b>httpFilterValidation</b> simply returns 0 for
-every filter to disable the filter use. Each filter must be a tcl command that returns the channel identifier
-of a bi-directional pipe.<p>
+This extension supports links to internal files with extension css, html, ico and svg. with the corresponding
+mine types text/css, text/html and image/x-icon. In addition, audio, image and video files of type
+mp3, jpeg, tiff, png, gif, bmp, svg, mp4, mkv and webm will be supported by default via method
+<a href="#httpExpandLink">httpExpandLink</a>. This method returns a list, containing an input handle to the
+link source as first element, the size of the source or -1 if the size is currently not available as second
+element and the mime type to be sent to the target as third element or an empty list for unsupported links.
+The source will be sent without any conversion, but in chunks if the file size exceeds 100 KB.<p>
 This extension supports logging: As default, logging output will be written to stderr, but can be
 redirected. Is set, the global variable <b>httpIO</b> can be set to a writable channel. The following
 logging levels can be selected via global variable <b>httpLogLevel</b>: <b>none</b>, <b>error</b>,
@@ -61,7 +60,7 @@ logging levels can be selected via global variable <b>httpLogLevel</b>: <b>none<
 details.<p>
 Basic authorization support is available through function
 <a href="#httpAuthCallback">httpAuthCallback</a>. This function will be called whenever a client tries
-to load one of the following file types: jpeg, tiff, png, gif, bmp, mp4, mkv, mov or webm. It must return zero to avoid
+to load one of the following file types: mp3, jpeg, tiff, png, gif, bmp, mp4, mkv or webm. It must return zero to avoid
 the download or a non-zero value to allow it. The default implementation returns 1. A service using
 this extension should overwrite this function with a service specific version.<br>
 Keep in mind: Download of css, html and ico files present in the working directory is always possible.
@@ -118,6 +117,7 @@ Service Control
 </ul>
 Internally Used Methods
 <ul>
+<a href="#httpExpandLink">httpExpandLink</a><br>
 <a href="#httpAuthCallback">httpAuthCallback</a><br>
 <a href="#log">log</a><br>
 <a href="#InternalUse">Further Methods for Internal Use</a>
@@ -840,6 +840,35 @@ a <b>command</b> script of a button to restart building of a page .</ul>
 <h1 id="InternalUse">Methods for Internal Use</h1>
 The following methods will be used internally by this extension. Changing or using these methods is possible, e.g.
 to create new widget types, but should not be necessary.
+
+<h3 id="httpExpandLink">httpExpandLink</h3>
+<h4>Synopsis</h4>
+<ul><b>httpExpandLink</b> <i>target</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>target</i></td><td>Name of server resource. This is normally a file name.
+</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>List containing the input handle, the amount of bytes to be read or -1 and the mime type. For unsupported links,
+an empty list will be returned.</ul>
+<h5>Usage</h5>
+<ul>Will be called before one of the supported files will be downloaded.
+The default implementation used within this extension supports files with following mime types:<ul>
+<li/>audio/mpeg for files with extension .mp3 or aac,
+<li/>image/svg+xml for files with extension .svg,
+<li/>image/jpeg for files with extension jpg, jpe or jpeg,
+<li/>image/tiff for files with extension tif or tiff,
+<li/>image/bmp for files with extension .bmp,
+<li/>image/gif for files with extension .gif,
+<li/>image/png for files with extension .png,
+<li/>video/mp4 for files with extension .mp4 or mkv,
+<li/>video/webm for files with extension .webm.
+</ul> This method must be overwritten within the server to support further mime types. Keep in mind: To save the default
+implementation, use something like <i>proc myExpandPink [info args httpExpandLink] [info body httpExpandLink]</i> to
+redefine it for a call within the overwriting method.
+</ul>
+</ul>
 
 <h3 id="httpAuthCallback">httpAuthCallback</h3>
 <h4>Synopsis</h4>

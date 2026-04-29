@@ -1528,88 +1528,50 @@ proc httpServer {service fd ip port} {
 		if $finished {
 			finalizePageRequest $service $widget $fd
 		}
-	} elseif {[file readable $file] && [catch {open $file rb} ffd] == 0 && [catch {file size $file} flen] == 0} {
-		set ext [string range [file extension $file] 1 end]
-		namespace eval $fd "
-			variable sourcefd $ffd
-		"
-		namespace upvar $fd sourcefd srcfd
-		foreach pair $what {
-			if {[llength $pair] == 2 && [lsearch -exact {Filter MimeType} [lindex $pair 0]] >= 0} {
-				set px([lindex $pair 0]) [lindex $pair 1]
-			}
-		}
-		if {[info exists px(Filter)] && [httpFilterValidation $px(Filter)] && [catch $px(Filter) pfd] == 0} {
-			namespace eval $fd {
-				proc closeFilter {args} {
-					lassign $args fd ofd service count
-					if {[catch {close $fd} erg] == 0} {
-						log debug "$count bytes sent to filter" $service
-					} {
-						log warning "Error closing filter at byte $count: $erg" $service
-					}
-					if {[catch {chan close $ofd write} erg]} {
-						after 5 "catch {close $ofd}"
-					}
-				}
-			}
-			fcopy $ffd $pfd -command "[set fd]::closeFilter $ffd $pfd $fd"
-			set ffd $pfd
-			log info "Using filter $px(Filter)" $fd
-			set flen -1
-		} {
-			fconfigure $ffd -blocking 1 -buffering none -buffersize 1000
-		}
-		if {[info exists px(MimeType)]} {
-			set type $px(MimeType)
-			log info "Using mime type $px(MimeType)" $fd
-		} {
-			if {$ext == "css" || $ext == "html"} {
-				set type "text/$ext; charset=utf-8"
-			} elseif {$ext == "ico"} {
-				set type "image/x-icon"
-			} elseif {$ext == "svg"} {
-				set type "image/svg+xml"
+	} {
+		if {[set extidx [lsearch -exact {.css .html .ico} [set ext [file extension $file]]]] >= 0} {
+			if {[file readable $file] && [catch {open $file rb} ffd] == 0 && [catch {file size $file} flen] == 0} {
+				set linkargs [list $ffd $flen [lindex {text/css text/html image/x-icon} $extidx]]
 			} {
-				set allowed [httpAuthCallback $what]
-				if {$allowed && ($ext == "jpg" || $ext == "jpe" || $ext == "jpeg")} {
-					set type "image/jpeg"
-				} elseif {$allowed && ($ext == "tiff" || $ext == "tif")} {
-					set type "image/tiff"
-				} elseif {$allowed && ($ext == "bmp" || $ext == "gif" || $ext == "png")} {
-					set type "image/$ext"
-				} elseif {$allowed && ($ext == "mp4" || $ext == "mkv" || $ext == "mov")} {
-					set type "video/mp4"
-				} elseif {$allowed && ($ext == "webm")} {
-					set type "video/webm"
-				} elseif {$allowed && ($ext == "mp3" || $ext == "aac")} {
-					set type "audio/mpeg"
-				} {
-					close $ffd
-					catch {close $srcfd}
-					log error "Resource invalid" $fd
-					set resp "HTTP/1.1 403 Forbidden"
-					append resp "\r\nContent-Type: text/html"
-					append resp "\r\nConnection: close"
-					if $allowed {
-						append resp "\r\n\r\n<body>Resource /[encoding converto utf-8 $file]: Invalid file type</body>"
-					} {
-						append resp "\r\n\r\n<body>Resource locked: No authorization</body>"
-					}
-					if [catch {puts -nonewline $fd $resp} err] {
-						log warning "Error sending http response: $err" $fd
-					} {
-						log debug "START INVALID FILE $file: [encoding convertfrom utf-8 $resp] :END INVALID FILE $file" $fd
-					}
-					after 100 "
-						catch {httpCloseClient $service $fd}
-						catch {namespace delete $fd}"
-					set type ""
-				}
+				set linkargs {}
+				catch {close $ffd}
 			}
+		} {
+			set linkargs [httpExpandLink $file]
 		}
-		if {$type != ""} {
-			log info "File $file present, type: $type" $fd
+		if {[llength $linkargs] != 3} {
+			log error "Resource $file not found" $fd
+			set resp "HTTP/1.1 404 Not Found"
+			append resp "\r\nContent-Type: text/html; charset=utf-8"
+			append resp "\r\nConnection: close"
+			append resp "\r\n\r\n<body>Resource /[encoding convertto utf-8 $file] not found</body>"
+			if {[catch {puts -nonewline $fd $resp} err]} {
+				log warning "Error sending http response: $err" $fd
+			} {
+				log debug  "START NOT FOUND: [encoding convertfrom utf-8 $resp] :END NOT FOUND" $fd
+			}
+			after 100 "
+				catch {httpCloseClient $service $fd}
+				catch {namespace delete $fd}
+			"
+		} elseif {[lsearch -exact {.css .html .ico} [file extension $file]] < 0 && [set allowed [httpAuthCallback $what]] == 0} {
+			close [lindex $linkargs 0]
+			log error "Resource $file invalid" $fd
+			set resp "HTTP/1.1 403 Forbidden"
+			append resp "\r\nContent-Type: text/html"
+			append resp "\r\nConnection: close"
+			append resp "\r\n\r\n<body>Resource locked.</body>"
+			if [catch {puts -nonewline $fd $resp} err] {
+				log warning "Error sending http response: $err" $fd
+			} {
+				log debug "START INVALID FILE $file: [encoding convertfrom utf-8 $resp] :END INVALID FILE $file" $fd
+			}
+			after 100 "
+				catch {httpCloseClient $service $fd}
+				catch {namespace delete $fd}"
+		} {
+			lassign $linkargs ffd flen type
+			log info "Resource $file present, type: $type" $fd
 			set resp "HTTP/1.1 200 OK"
 			append resp "\r\nContent-Type: $type"
 			if {$flen > 0} {
@@ -1620,97 +1582,87 @@ proc httpServer {service fd ip port} {
 			}
 			append resp "\r\nConnection: close"
 			append resp "\r\n\r\n"
-			set erg [catch {
-				fconfigure $fd -blocking 0
-				puts -nonewline $fd $resp
-				if {0 < $flen && $flen <= 102400} {
-					log info "Sending data..." $fd
-					fileevent $fd writable [list apply [list {ifd ofd service} {
+			fconfigure $fd -blocking 0
+			puts -nonewline $fd $resp
+			if {0 < $flen && $flen <= 102400} {
+				log info "Sending data..." $fd
+				namespace eval $fd {
+					proc copyResource {args} {
+						lassign $args ifd ofd service size count
+						if {$count < $size} {
+							log info "Sending stopped a byte $count of $size" $ofd
+						} {
+							log info "Sending finished ($size bytes)" $ofd				
+						}
+						catch {close $ifd}
+						after idle "finalizePageRequest $service {} $ofd 0"
+					}
+				}
+				fcopy $ffd $fd -size $flen -command "[set fd]::copyResource $ffd $fd $service $flen"
+			} {
+				namespace eval $fd {
+					proc copyChunk {ifd ofd service args} {
+						variable sourcefd
 						if [catch {
-							if {[eof $ifd] == 0} {
-								puts -nonewline $ofd [read $ifd 1000]
-							} {
+							lassign $args remaining count
+							if {$remaining == 0} {
 								log debug "Sending finished" $ofd
-								httpCloseClient $service $ofd
-								close $ifd
-								catch {close $srcfd}
-								namespace delete $ofd
-							}
-						} err] {
-							log warning "Error sending http response for input handle $ifd: $err" $ofd
-							catch {httpCloseClient $service $ofd}
-							catch {close $ifd}
-							catch {namespace delete $ofd}
-						}					
-					}] $ffd $fd $service]
-				} {
-					namespace eval $fd {
-						proc copyChunk {ifd ofd service args} {
-							variable sourcefd
-							if [catch {
-								lassign $args remaining count
 								if {$remaining == 0} {
-									log debug "Sending finished" $ofd
-									if {$remaining == 0} {
-										puts -nonewline $ofd "\r\n0;\r\n\r\n"
-									}
-									catch {close $ifd}
-									catch {close $sourcefd}
-									after idle "finalizePageRequest $service {} $ofd 0"
-								} elseif {0 < $remaining && $remaining < 102400} {
-									log debug "Sending last chunk" $ofd
-									puts -nonewline $ofd "\r\n[format "%x" $remaining];\r\n"
-									fcopy $ifd $ofd -size $remaining -command "[set ofd]::copyChunk $ifd $ofd $service 0"
-								} elseif {$count == 102400} {
-									log debug "Sending next chunk" $ofd
-									puts -nonewline $ofd "\r\n19000;\r\n"
-									if {$remaining > 0} {
-										set remaining [expr $remaining - 102400]
-									}
-									fcopy $ifd $ofd -size 102400 -command "[set ofd]::copyChunk $ifd $ofd $service $remaining"
-								} {
-									log debug "Finalizing last chunk" $ofd
-									catch {close $ifd}
-									catch {close $sourcefd}
-									if {[catch {fconfigure $ofd -buffersize 102500 -blocking 0}] == 0} {
-										catch {puts -nonewline $ofd "[format "%[expr 102400 - $count]s" {}]\r\n0;\r\n\r\n"}
-									}
-									after idle "finalizePageRequest $service {} $ofd 0"
-								}
-							} ret opt] {
-								array set errorinfo $opt
-								log warning "Error in download chunk handling: $ret" $ofd
-								foreach index [array names errorinfo] {
-									log error "  $index: $errorinfo($index)" $ofd
+									puts -nonewline $ofd "\r\n0;\r\n\r\n"
 								}
 								catch {close $ifd}
 								catch {close $sourcefd}
 								after idle "finalizePageRequest $service {} $ofd 0"
+							} elseif {0 < $remaining && $remaining < 102400} {
+								log debug "Sending last chunk" $ofd
+								puts -nonewline $ofd "\r\n[format "%x" $remaining];\r\n"
+								fcopy $ifd $ofd -size $remaining -command "[set ofd]::copyChunk $ifd $ofd $service 0"
+							} elseif {$count == 102400} {
+								log debug "Sending next chunk" $ofd
+								puts -nonewline $ofd "\r\n19000;\r\n"
+								if {$remaining > 0} {
+									set remaining [expr $remaining - 102400]
+								}
+								fcopy $ifd $ofd -size 102400 -command "[set ofd]::copyChunk $ifd $ofd $service $remaining"
+							} {
+								log debug "Finalizing last chunk" $ofd
+								catch {close $ifd}
+								catch {close $sourcefd}
+								if {[catch {fconfigure $ofd -buffersize 102500 -blocking 0}] == 0} {
+									catch {puts -nonewline $ofd "[format "%[expr 102400 - $count]s" {}]\r\n0;\r\n\r\n"}
+								}
+								after idle "finalizePageRequest $service {} $ofd 0"
 							}
+						} ret opt] {
+							array set errorinfo $opt
+							log warning "Error in download chunk handling: $ret" $ofd
+							foreach index [array names errorinfo] {
+								log error "  $index: $errorinfo($index)" $ofd
+							}
+							catch {close $ifd}
+							catch {close $sourcefd}
+							after idle "finalizePageRequest $service {} $ofd 0"
 						}
 					}
-					log info "Sending first chunk..." $fd
-					puts -nonewline $fd "19000;\r\n"
-					fcopy $ffd $fd -size 102400 -command "[set fd]::copyChunk $ffd $fd $service [expr $flen-102400]"
 				}
-			}]
+				log info "Sending first chunk..." $fd
+				puts -nonewline $fd "19000;\r\n"
+				fcopy $ffd $fd -size 102400 -command "[set fd]::copyChunk $ffd $fd $service [expr $flen-102400]"
+			}
 		}
-	} {
-		log error "Resource $file not found" $fd
-		set resp "HTTP/1.1 404 Not Found"
-		append resp "\r\nContent-Type: text/html; charset=utf-8"
-		append resp "\r\nConnection: close"
-		append resp "\r\n\r\n<body>Resource /[encoding convertto utf-8 $file] not found</body>"
-		if {[catch {puts -nonewline $fd $resp} err]} {
-			log warning "Error sending http response: $err" $fd
-		} {
-			log debug  "START NOT FOUND: [encoding convertfrom utf-8 $resp] :END NOT FOUND" $fd
-		}
-		after 100 "
-			catch {httpCloseClient $service $fd}
-			catch {namespace delete $fd}
-		"
 	}
+}
+
+proc httpExpandLink {file} {
+	set supportedExts {.mp3 .aac .svg .jpg .jpe .jpeg .tiff .tif .bmp .gif .png .mp4 .mkv .webm}
+	set typeidx       {0    0    1    2    2    2     3     3    4    5    6    7    7    8}
+	set types {audio/mpeg image/svg+xml image/jpeg image/tiff image/bmp image/gif image/png video/mp4 video/webm}
+	if {[set extidx [lsearch -exact $supportedExts [file extension $file]]] >= 0} {
+		if {[file readable $file] && [catch {open $file rb} ffd] == 0 && [catch {file size $file} flen] == 0} {
+			return [list $ffd $flen [lindex $types [lindex $typeidx $extidx]]]
+		}
+	}
+	return {}
 }
 
 proc finalizePageRequest {service widget socket {delay 100}} {
