@@ -1414,6 +1414,8 @@ proc httpServer {service fd ip port} {
 			foreach varname [array names vars] {
 				if {$vars($varname) == "Pressed"} {
 					upvar #0 $varname wdg
+					set lgtype info
+					set lgmsg "After $varname"
 					if {[info exist wdg] == 0} {
 						lassign [split $varname "_"] space name
 						catch {namespace upvar $space $name wdg}
@@ -1421,11 +1423,16 @@ proc httpServer {service fd ip port} {
 					if {[array names wdg -exact "type"] == "type" && [array names wdg -exact "precommand"] == "precommand"} {
 						if [catch {apply [list {service widget socket} $wdg(precommand)] $service $varname $fd} ret opt] {
 							array set errorinfo $opt
-							log error "Error in precommand:\n$errorinfo(-errorinfo)" "$fd - $varname"
+							set lgtype error
+							append lgmsg " Error in precommand:\n$errorinfo(-errorinfo)"
 						} {
-							log info "Next widget: '$ret'" $fd
-							if {$ret == {$EXIT}} return
+							append lgmsg "Next widget: '$ret'"
+							if {$ret == {$EXIT}} {
+								log info "$lgmsg: Processing passed to precommand of $varname" $fd
+								return
+							}
 						}
+						log $lgtype $lgmsg $fd
 						if {[set idx [lsearch -exact -index 0 $srv(pagelist) $ret]] >= 0} {
 							set widx $idx
 						}
