@@ -1562,7 +1562,7 @@ proc httpServer {service fd ip port} {
 				catch {namespace delete $fd}
 			"
 		} elseif {[lsearch -exact {.css .html .ico} [file extension $file]] < 0 && [set allowed [httpAuthCallback $what]] == 0} {
-			close [lindex $linkargs 0]
+			catch {close [lindex $linkargs 0]}
 			log error "Resource $file invalid" $fd
 			set resp "HTTP/1.1 403 Forbidden"
 			append resp "\r\nContent-Type: text/html"
