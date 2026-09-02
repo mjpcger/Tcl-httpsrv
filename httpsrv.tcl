@@ -1547,20 +1547,23 @@ proc httpServer {service fd ip port} {
 			set linkargs [httpExpandLink $file]
 		}
 		if {[llength $linkargs] != 3} {
-			log error "Resource $file not found" $fd
-			set resp "HTTP/1.1 404 Not Found"
-			append resp "\r\nContent-Type: text/html; charset=utf-8"
-			append resp "\r\nConnection: close"
-			append resp "\r\n\r\n<body>Resource /[encoding convertto utf-8 $file] not found</body>"
-			if {[catch {puts -nonewline $fd $resp} err]} {
-				log warning "Error sending http response: $err" $fd
-			} {
-				log debug  "START NOT FOUND: [encoding convertfrom utf-8 $resp] :END NOT FOUND" $fd
-			}
-			after 100 "
-				catch {httpCloseClient $service $fd}
-				catch {namespace delete $fd}
-			"
+			after 5000 [list apply { {file fd service} {
+					log error "Resource $file not found" $fd
+					set resp "HTTP/1.1 404 Not Found"
+					append resp "\r\nContent-Type: text/html; charset=utf-8"
+					append resp "\r\nConnection: close"
+					append resp "\r\n\r\n<body>Resource /[encoding convertto utf-8 $file] not found</body>"
+					if {[catch {puts -nonewline $fd $resp} err]} {
+						log warning "Error sending http response: $err" $fd
+					} {
+						log debug  "START NOT FOUND: [encoding convertfrom utf-8 $resp] :END NOT FOUND" $fd
+					}
+					after 100 "
+						catch {httpCloseClient $service $fd}
+						catch {namespace delete $fd}
+					"
+				}} $file $fd $service
+			]
 		} elseif {[lsearch -exact {.css .html .ico} [file extension $file]] < 0 && [set allowed [httpAuthCallback $what]] == 0} {
 			catch {close [lindex $linkargs 0]}
 			log error "Resource $file invalid" $fd
@@ -1597,7 +1600,7 @@ proc httpServer {service fd ip port} {
 					proc copyResource {args} {
 						lassign $args ifd ofd service size count
 						if {$count < $size} {
-							log info "Sending stopped a byte $count of $size" $ofd
+							log info "Sending stopped at byte $count of $size" $ofd
 						} {
 							log info "Sending finished ($size bytes)" $ofd				
 						}
