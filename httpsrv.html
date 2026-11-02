@@ -165,10 +165,8 @@ detailed information, see <a href="#httpNormalize">httpNormalize</a>.</td></tr>
 of a HPPT POST body. Element names are the value names and their values the corresponding values.<br>
 In addition, post contains always the client namespace name in element <b>namespace</b> and precommand
 scripts can specify the text of specific text labels, see <a href="#httpLabel">httpLabel</a>.</td></tr>
-<tr><td style="vertical-align: top;">trigger:</td><td>Internally used variable used for timeout
-handling of client communication. Contents must be an integer value. Can be used within command
-scripts, but must not be used in asynchronous processings to avoid malfunction of
-client communication.</td></tr>
+<tr><td style="vertical-align: top;">trigger:</td><td>Connect time in milliseconds.
+Can be used within command scripts, e.g. for some timeout processing, but must not be changed.</td></tr>
 </table>
 </ul>
 Each service implementation can use this namespace to add further variables as needed. Keep in mind that
@@ -702,7 +700,17 @@ body of main HTML page.</td></tr>
 <h5>Usage</h5>
 <ul>Create a server that provides a html page constructed from the specified widget. See
 <a href="#httpAddPage">httpAddPage</a> for details about parameter <i>widget</i> and <i>args</i>, because Both
-parameters will be used internally to add the initial page to the service.
+parameters will be used internally to add the initial page to the service. The service will be represented by
+a global array variable with the name of the service. The following element are always present within this
+array:<p>
+<table>
+<tr><td><h5>Element Name</h5></td><td><h5>Description</h5></td></tr>
+<tr><td>port</td><td>Port of the service.</td></tr>
+<tr><td>pagelist</td><td>List variable containing the page name and the corresponding attributes specified within
+the <a href="#httpAddPage">httpAddPage</a> command.</td></tr>
+<tr><td>sfd</td><td>Socket handle of the service. </td></tr>
+<tr><td>fds</td><td>Socket handles used for client communication. For use, see <a href="#socket">Client Namespace</a></td></tr>
+</table>
 </ul>
 </ul>
 
@@ -723,7 +731,7 @@ list with more than 2 elements: List containing a keyword, followed by command s
 be one of <b>precommand</b>, <b>command</b> or <b>postcommand</b> within the first list element. All other
 list elements form the corresponding command.<br>
 Each of the specified commands will be used as body of a procedure with the arguments <b>service</b>, 
-<b>socket</b>and <b>page</b>, where<ul>
+<b>socket</b> and <b>page</b>, where<ul>
 <table>
 <tr><td style="vertical-align: top;"><b>page</b>:</td><td>Name of the page widget.</td></tr>
 <tr><td style="vertical-align: top;"><b>service</b>:</td><td>Name of the service. A global array variable with

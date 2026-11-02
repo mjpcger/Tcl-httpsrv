@@ -1313,63 +1313,116 @@ proc httpServer {service fd ip port} {
 	upvar #0 $service srv
 	global httpIO httpEncoding
 	catch {namespace delete $fd}
-	namespace eval $fd {
+	namespace eval $fd "
 		variable post
-		variable trigger
+		variable trigger [clock milliseconds]
 		variable pathqueries
 		variable addedvars {}
 		variable addedwidgets
-		variable beautyspaces ""
-	}
-	set watchdog [after 15000 "
-		catch {close $fd}
-		log info {Request abort by watchdog: Invalid or missing header} $fd
-	"]
-	namespace upvar $fd post vars pathqueries what
+		variable beautyspaces {}
+		namespace eval $port {
+			variable statevar 1
+			variable rqlinevar
+			variable filevar
+			variable watchdogvar [after 15000 "
+				catch {namespace delete $fd}
+				catch {close $fd}
+				log info {Request abort by watchdog: Invalid or missing header} $fd
+			"]
+			variable postlenvar
+			variable paramsvar
+		}
+	"
 	log info "httpServer for $service connected on port $srv(port) from $ip:$port" $fd
 	fconfigure $fd -translation crlf -encoding $httpEncoding -buffering none -blocking 0
-	getline $fd rqline
-	set err [catch {
-		set what [httpNormalize [string range [lindex $rqline 1] 1 end]]
-		set file [lindex $what 0]
-		eval "set file $file"
-	} txt]
-	if {$err || [llength $rqline] != 3 || [string range [lindex $rqline 2] 0 4] != "HTTP/"} {
-		catch {namespace delete $fd}
-		log warning "Request: $rqline, ignore invalid request, err: $txt" $fd
-		after cancel $watchdog
-		after 10000 "catch {close $fd}"
+	fileevent $fd readable "httpServerCont {$service} $fd $ip $port"
+}
+
+proc httpServerCont {service fd ip port} {
+	if {[namespace exists $fd] == 0} return
+	upvar #0 $service srv
+	global httpIO httpEncoding
+	namespace upvar $fd post vars pathqueries what
+	namespace upvar [set fd]::$port rqlinevar rqline statevar state filevar file watchdogvar watchdog postlenvar postlen paramsvar params
+	if [eof $fd] {
+		# Socket closed: Cancel all
+		fileevent $fd readable ""
+		close $fd
+		namespace delete $fd
 		return
 	}
-	log info "Request: $rqline, Object: $what" $fd
-	while {[namespace exists $fd] && [getline $fd line] != 0} {
-		log debug $line $fd
-		if {[lindex [set line [split $line :]] 0] == "Content-Length" && [scan [lindex $line 1] "%d%s" len s] == 1} {
-			set postlen $len
+	if {$state == 1} {
+		# Via fileevent: Read request line
+		if {[gets $fd rqline] < 0} return
+		set err [catch {
+			set what [httpNormalize [string range [lindex $rqline 1] 1 end]]
+			set file [lindex $what 0]
+			eval "set file $file"
+		} txt]
+		if {$err || [llength $rqline] != 3 || [string range [lindex $rqline 2] 0 4] != "HTTP/"} {
+			log warning "Request: $rqline, ignore invalid request, err: $txt" $fd
+			after cancel $watchdog
+			fileevent $fd readable ""
+			after 10000 "catch {close $fd}"
+			catch {namespace delete $fd}
+			return
+		}
+		log info "Request: $rqline, Object: $what" $fd
+		incr state
+	}
+	if {$state == 2} {
+		# After request line has been read of via fileevent while reading header lines
+		while 1 {
+			if {[gets $fd line] < 0} return
+			if {$line != ""} {		
+				log debug $line $fd
+				if {[lindex [set line [split $line :]] 0] == "Content-Length" && [scan [lindex $line 1] "%d%s" len s] == 1} {
+					set postlen $len
+				}
+			} break
+		}
+		incr state
+	}
+	if {$state == 3} {
+		# Via fileevent after header has been read
+		after cancel $watchdog
+		lappend srv(fds) $fd
+		if {[lindex $rqline 0] == "POST"} {
+			if {[catch {expr $postlen + 0}]} {
+				after 100 "httpServerCont {$service} $fd $ip $port"
+				fileevent $fd readable ""
+				set state 4
+				return
+			} {
+				set params ""
+				set state 5
+			}
+		} {
+			set params ""
 		}
 	}
-	if {[namespace exists $fd] == 0} return
-	after cancel $watchdog
-	lappend srv(fds) $fd
-	if {[lindex $rqline 0] == "POST"} {
-		if {[catch {expr $postlen + 0}]} {
-			after 100 "catch {incr [set fd]::trigger}"
-			if [catch {vwait [set fd]::trigger}] {
-				log warning "Request timed out" $fd
-				return
-			}
-			set erg [catch {read $fd; fconfigure $fd -blocking 1} params]
-		} {
-			set erg [catch {read $fd $postlen} params]
+	if {$state == 4} {
+		# Via after 100 to read as many parameters as possible
+		set erg [catch {read $fd; fconfigure $fd -blocking 1} params]
+		set state 6
+	} elseif {$state == 5} {
+		# Via fileevent or after POST parameters have been read
+		if {[set erg [catch {read $fd [expr $postlen - [string length $params]]} rest]] == 0} {
+			append params $rest
+			if {[string length $params] < $postlen} return
 		}
+		set state 6
+	}
+	if {$state == 6} {
+		# after POST parameters have been read
 		if {$erg != 0} {
 			set what ".htm"
 		} {
 			log debug $params $fd
 		}
-	} {
-		set params ""
 	}
+	# End of state processing
+	fileevent $fd readable ""
 	fconfigure $fd -translation binary
 	set widx -1
 	if {$params != ""} {
@@ -1584,10 +1637,9 @@ proc httpServer {service fd ip port} {
 			log info "Resource $file present, type: $type" $fd
 			set resp "HTTP/1.1 200 OK"
 			append resp "\r\nContent-Type: $type"
-			if {$flen > 0} {
+			if {$flen > 0 && $flen <= 102400} {
 				append resp "\r\nContent-Length: $flen"
-			}
-			if {$flen > 102400 || $flen < 0} {
+			} {
 				append resp "\r\nTransfer-Encoding: chunked"
 			}
 			append resp "\r\nConnection: close"
@@ -1858,18 +1910,6 @@ proc httpAuthCallback {what} {
 
 proc httpFilterValidation {filter} {
 	return 0
-}
-
-proc getline {fd var} {
-	if {[catch {fileevent $fd readable "catch {fileevent $fd readable {}};set [set fd]::trigger 0"} err] == 0} {
-		vwait [set fd]::trigger
-	}
-	if [catch {uplevel 1 "gets $fd $var"} retval] {
-		log warning "Error reading line from socket: $retval" $fd
-		uplevel 1 "set $var {}"
-		set retval -1
-	}
-	return $retval
 }
 
 set httpBeautifyHtml 0
