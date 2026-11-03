@@ -359,6 +359,12 @@ script. In addition, any page specific command script will not be executed in th
 scripts specified via <a href="#httpAddPage">httpAddPage</a> or <a href="#httpCreateService">httpCreateService</a>
 if previous widget specific precommand or widget specific command scripts have been finished.
 </ul><td></tr>
+<tr><td style="vertical-align: top;">event:</td><td>Specifies which event shall result in a transmit of the
+current value, together with all other form values - to the client when the specified event occurs. The values
+for all supported events can be added to support transmission in case of multiple events. A value of 0 -
+the default - specifies that no supported event will force a transmission. The following values are supported:
+<ul><li/> 1: blur (focus out) event: If the field looses the focus.
+</ul><td></tr>
 <tr><td style="vertical-align: top;">placeholder:</td><td>String to be shown whenever the entry field is empty,<td></tr>
 <tr><td style="vertical-align: top;">precommand:</td><td>Command to be executed when hidden entry has been
 mutated to a submit button and clicked via Javascrip by menu.  For further details, see

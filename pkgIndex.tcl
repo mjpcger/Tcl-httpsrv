@@ -1,3 +1,3 @@
 # Index file to load the httpsrv package.
 
-package ifneeded httpsrv 1.3.1 "[list source [file join $dir httpsrv.tcl]];package provide httpsrv 1.3.1"
+package ifneeded httpsrv 1.3.2 "[list source [file join $dir httpsrv.tcl]];package provide httpsrv 1.3.2"

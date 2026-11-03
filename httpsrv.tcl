@@ -331,7 +331,7 @@ proc httpCreateLabel {name vars} {
 }
 
 
-# httpEntry: Define values for an entry fied. Allowed options:
+# httpTextArea: Define values for a text area fied. Allowed options:
 #	style: Style string in css format
 #	class: Css class name
 #	value: Entry contents
@@ -469,6 +469,7 @@ proc httpEntry {name args} {
 	set opt(varname) [regsub -all "::" $name "_"]
 	set opt(command) ""
 	set opt(precommand) ""
+	set opt(event) 0
 	set allowedOptions [array names opt]
 	set allowedtypes "button color date datetime-local email file hidden month number password search tel text time url week"
 	foreach elem $args {
@@ -484,6 +485,10 @@ proc httpEntry {name args} {
 		if {$option == "size" && ([catch {expr $val + 1}] || $val <= 0)} {
 			unset opt
 			error "Bad httpEntry size ($val) in entry $name"
+		}
+		if {$option == "event" && ([catch {expr $val + 1}] || $val < 0 || $val > 1)} {
+			unset opt
+			error "Bad httpEntry event ($val) in entry $name"
 		}
 		set opt($option) $val
 	}
@@ -518,6 +523,10 @@ proc httpCreateEntry {name vars} {
 	}
 	if {$opt(size) != ""} {
 		append ret " size=$opt(size)"
+	}
+	if {$opt(event) != 0} {
+		append ret " onblur=\"btn = document.getElementById('$opt(varname)'); $opt(varname)_val = btn.value;"
+		append ret "btn.type='submit'; btn.value = $opt(varname)_val; btn.click(); btn.type='$opt(view)';\""
 	}
 	set opt(vars) $opt(varname)
 	append ret " />"
@@ -1464,11 +1473,13 @@ proc httpServerCont {service fd ip port} {
 			log debug "$varname <- $vars($varname)" $fd
 		}
 		if {[array names vars -exact $service] == $service} {
+			set clicked 0
 			foreach varname [array names vars] {
 				if {$vars($varname) == "Pressed"} {
 					upvar #0 $varname wdg
 					set lgtype info
 					set lgmsg "After $varname"
+					set clicked 1
 					if {[info exist wdg] == 0} {
 						lassign [split $varname "_"] space name
 						catch {namespace upvar $space $name wdg}
@@ -1492,6 +1503,9 @@ proc httpServerCont {service fd ip port} {
 					}
 					break
 				}
+			}
+			if {$clicked == 0} {
+				set widx [lsearch -exact -index 0 $srv(pagelist) $vars($service)]
 			}
 		}
 	} {
