@@ -1343,7 +1343,7 @@ proc httpServer {service fd ip port} {
 		}
 	"
 	log info "httpServer for $service connected on port $srv(port) from $ip:$port" $fd
-	fconfigure $fd -translation crlf -encoding $httpEncoding -buffering none -blocking 0
+	fconfigure $fd -translation crlf -encoding $httpEncoding -buffering none -blocking 0 -nodelay 1
 	fileevent $fd readable "httpServerCont {$service} $fd $ip $port"
 }
 
@@ -1619,7 +1619,7 @@ proc httpServerCont {service fd ip port} {
 					set resp "HTTP/1.1 404 Not Found"
 					append resp "\r\nContent-Type: text/html; charset=utf-8"
 					append resp "\r\nConnection: close"
-					append resp "\r\n\r\n<body>Resource /[encoding convertto utf-8 $file] not found</body>"
+					append resp "\r\n\r\n<body>Resource /[httpText $file] not found</body>"
 					if {[catch {puts -nonewline $fd $resp} err]} {
 						log warning "Error sending http response: $err" $fd
 					} {
@@ -1658,7 +1658,7 @@ proc httpServerCont {service fd ip port} {
 			}
 			append resp "\r\nConnection: close"
 			append resp "\r\n\r\n"
-			fconfigure $fd -blocking 0
+			fconfigure $fd -blocking 0 -nodelay 0
 			puts -nonewline $fd $resp
 			if {0 < $flen && $flen <= 102400} {
 				log info "Sending data..." $fd
