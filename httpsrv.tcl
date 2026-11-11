@@ -1312,15 +1312,32 @@ proc httpStartService {service} {
 }
 
 if {$tcl_version < 9.0} {
-	set httpEncoding "binary"
+	proc httpconfigure {args} {
+		if {[llength $args] > 1} {
+			if {[set idx [lsearch -exact $args -nodelay]] >= 0} {
+				set args [concat [lrange $args 0 $idx-1] [lrange $args $idx+2 end]]
+			}
+			if {[set idx [lsearch -exact $args -keepalive]] >= 0} {
+				set args [concat [lrange $args 0 $idx-1] [lrange $args $idx+2 end]]
+			}
+			eval "fconfigure $args"
+			return ""
+		}
+		eval "fconfigure $args"
+	}
 } {
-	set httpEncoding "iso8859-1"
+	proc httpconfigure {args} {
+		if {[set idx [lsearch -exact $args -encoding]] >= 0 && [lindex $args $idx+1] == "binary"} {
+			lset args $idx+1 "iso8859-1"
+		}
+		eval "fconfigure $args"
+	}
 } 
 
 # The server proc
 proc httpServer {service fd ip port} {
 	upvar #0 $service srv
-	global httpIO httpEncoding
+	global httpIO
 	catch {namespace delete $fd}
 	namespace eval $fd "
 		variable post
@@ -1343,14 +1360,14 @@ proc httpServer {service fd ip port} {
 		}
 	"
 	log info "httpServer for $service connected on port $srv(port) from $ip:$port" $fd
-	fconfigure $fd -translation crlf -encoding $httpEncoding -buffering none -blocking 0 -nodelay 1
+	httpconfigure $fd -translation crlf -encoding binary -buffering none -blocking 0 -nodelay 1
 	fileevent $fd readable "httpServerCont {$service} $fd $ip $port"
 }
 
 proc httpServerCont {service fd ip port} {
 	if {[namespace exists $fd] == 0} return
 	upvar #0 $service srv
-	global httpIO httpEncoding
+	global httpIO
 	namespace upvar $fd post vars pathqueries what
 	namespace upvar [set fd]::$port rqlinevar rqline statevar state filevar file watchdogvar watchdog postlenvar postlen paramsvar params
 	if [eof $fd] {
@@ -1412,7 +1429,7 @@ proc httpServerCont {service fd ip port} {
 	}
 	if {$state == 4} {
 		# Via after 100 to read as many parameters as possible
-		set erg [catch {read $fd; fconfigure $fd -blocking 1} params]
+		set erg [catch {read $fd; httpconfigure $fd -blocking 1} params]
 		set state 6
 	} elseif {$state == 5} {
 		# Via fileevent or after POST parameters have been read
@@ -1432,7 +1449,7 @@ proc httpServerCont {service fd ip port} {
 	}
 	# End of state processing
 	fileevent $fd readable ""
-	fconfigure $fd -translation binary
+	httpconfigure $fd -translation binary
 	set widx -1
 	if {$params != ""} {
 		set varvals [lrange [httpNormalize ".?$params"] 1 end]
@@ -1466,6 +1483,7 @@ proc httpServerCont {service fd ip port} {
 				set widx -1
 				set file ""
 				log warning "Invalid varname: $varname -> break" $fd
+				array unset vars
 				break
 			}
 			set varnames [lreplace $varnames $vpos $vpos]
@@ -1658,7 +1676,7 @@ proc httpServerCont {service fd ip port} {
 			}
 			append resp "\r\nConnection: close"
 			append resp "\r\n\r\n"
-			fconfigure $fd -blocking 0 -nodelay 0
+			httpconfigure $fd -blocking 0 -nodelay 0
 			puts -nonewline $fd $resp
 			if {0 < $flen && $flen <= 102400} {
 				log info "Sending data..." $fd
@@ -1694,17 +1712,23 @@ proc httpServerCont {service fd ip port} {
 								puts -nonewline $ofd "\r\n[format "%x" $remaining];\r\n"
 								fcopy $ifd $ofd -size $remaining -command "[set ofd]::copyChunk $ifd $ofd $service 0"
 							} elseif {$count == 102400} {
-								log debug "Sending next chunk" $ofd
-								puts -nonewline $ofd "\r\n19000;\r\n"
-								if {$remaining > 0} {
-									set remaining [expr $remaining - 102400]
+								if {[catch {puts -nonewline $ofd "\r\n19000;\r\n"}]} {
+									log debug "Connection reset" $ofd
+									catch {close $ifd}
+									catch {close $sourcefd}
+									after idle "finalizePageRequest $service {} $ofd 0"
+								} {
+									log debug "Sending next chunk" $ofd
+									if {$remaining > 0} {
+										set remaining [expr $remaining - 102400]
+									}
+									fcopy $ifd $ofd -size 102400 -command "[set ofd]::copyChunk $ifd $ofd $service $remaining"
 								}
-								fcopy $ifd $ofd -size 102400 -command "[set ofd]::copyChunk $ifd $ofd $service $remaining"
 							} {
 								log debug "Finalizing last chunk" $ofd
 								catch {close $ifd}
 								catch {close $sourcefd}
-								if {[catch {fconfigure $ofd -buffersize 102500 -blocking 0}] == 0} {
+								if {[catch {httpconfigure $ofd -buffersize 102500 -blocking 0}] == 0} {
 									catch {puts -nonewline $ofd "[format "%[expr 102400 - $count]s" {}]\r\n0;\r\n\r\n"}
 								}
 								after idle "finalizePageRequest $service {} $ofd 0"

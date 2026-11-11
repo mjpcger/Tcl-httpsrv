@@ -119,6 +119,7 @@ Internally Used Methods
 <ul>
 <a href="#httpExpandLink">httpExpandLink</a><br>
 <a href="#httpAuthCallback">httpAuthCallback</a><br>
+<a href="#httpconfigure">httpconfigure</a><br>
 <a href="#log">log</a><br>
 <a href="#InternalUse">Further Methods for Internal Use</a>
 </ul>
@@ -131,9 +132,6 @@ and how to use them:
 <tr><td style="vertical-align: top;">httpBeautifyHtml</td><td>Specifies whether generated
 html code shall be compact (0) or good readable (&gt; 0). Positive values specify the indentation (in
 characters) to use for readability.</td></tr>
-<tr><td style="vertical-align: top;">httpEncoding</td><td>Specifies the encoding used
-for binary file access. Depending on the Tcl version, encoding is <i>binary</i> (version &lt; 9) or
-<i>iso8859-1</i> otherwise. This valus should not be changed.</td></tr>
 <tr><td style="vertical-align: top;">httpIO</td><td>Contains a list of channel identifiers to be used
 for logging output. Default: stderr - the console output. </td></tr>
 <tr><td style="vertical-align: top;">httpLoggingTypes</td><td>Holds all possible logging levels, from
@@ -898,6 +896,24 @@ For details, see <a href="#httpNormalize">httpNormalize</a>.</td></tr>
 <ul>Will be called before one of the supported image or video files will be downloaded. Must be
 overwritten within the server to allow authentification because the default implementation Returns
 always 1.
+</ul>
+</ul>
+
+<h3 id="httpconfigure">httpconfigure</h3>
+<h4>Synopsis</h4>
+<ul><b>httpconfigure</b> <i>parameter ...</i>
+<p><table>
+<tr><td><h5>Parameter</h5></td><td><h5>Description</h5></td></tr>
+<tr><td style="vertical-align: top;"><i>parameter</i></td><td>Any parameter allowed for tcl command fconfigure.</td></tr>
+</table>
+<h5>Returns</h5>
+<ul>Return code of corresponding fconfigure command.</ul>
+<h5>Usage</h5>
+<ul>Is a replacement for fconfigure to allow version independent usage: On Tcl versions lower 9.0, switches -keepalive and
+-nodelay and their values will be discarded since both switches are not supported in this version. On version 9.0 and above,
+-encoding binary will be replaced by -encoding iso8859-1 because this is the official replacement in 9.0 and above.<br>
+So, even if tcl version is 8.x or 9.x, you can call <i>httpconfigure $socket -encoding binary -nodelay 0</i> without getting
+an error. 
 </ul>
 </ul>
 
