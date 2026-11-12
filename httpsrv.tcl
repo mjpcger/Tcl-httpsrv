@@ -1,6 +1,6 @@
-# httpText: Replace "<" by "&lt;" and "\n" by "<br/>"
+# httpText: Replace "&" by "&amp;", "<" by "&lt;" and "\n" by "<br/>"
 proc httpText text {
-	encoding convertto utf-8 [regsub -all "\[\r\n\]" [regsub -all "\r\n" [regsub -all "<" $text "\\&lt;"] "<br/>"] "<br/>"]
+	encoding convertto utf-8 [regsub -all "\[\r\n\]" [regsub -all "\r\n" [regsub -all "<" [regsub -all "&" $text "\\&amp;"] "\\&lt;"] "<br/>"] "<br/>"]
 }
 
 # httpAttrText: Replace {"<>} and control characters by their &#...; representation
@@ -96,7 +96,7 @@ proc httpLink {name args} {
 		error "Cannot create link $name: Object $name just exists"
 	}
 	upvar [httpGetLevel $name] $name opt
-	uplevel 1 "httpInitWidget $name"
+	uplevel 1 "httpInitWidget $name 1"
 	set opt(label) ""
 	set opt(target) ""
 	set allowedOptions [array names opt]
@@ -1934,7 +1934,8 @@ proc log {level text {source {}}} {
 		set type [lsearch -exact $httpLoggingTypes $httpLogLevel]
 	}
 	if {$level <= $type && $level > 0} {
-		set dt [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S"]
+		set ms [clock milliseconds]
+		set dt [format "[clock format [string range $ms 0 end-3] -format "%Y-%m-%d %H:%M:%S"].%s" [string range $ms end-2 end]]
 		set data [format "%s %s%s %s" $dt [lindex $httpLoggingTypes $level] " $source" $text]
 		foreach logfd $httpIO {
 			puts $logfd $data
